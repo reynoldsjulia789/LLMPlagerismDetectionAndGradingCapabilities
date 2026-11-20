@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rationale", "structure", "syntax", "tokens", "logic", "similarity", "copied_regions"],
+  "properties": {
+    "rationale": {
+      "type": "string",
+      "description": "Brief explanation (at most 120 words) of the decisive evidence for and against derivation."
+    },
+    "structure": { "type": "integer", "description": "0-100 structural similarity" },
+    "syntax":    { "type": "integer", "description": "0-100 syntactic similarity" },
+    "tokens":    { "type": "integer", "description": "0-100 normalized token similarity" },
+    "logic":     { "type": "integer", "description": "0-100 logic / control-flow similarity" },
+    "similarity": { "type": "integer", "description": "0-100 overall likelihood that A was derived from B or vice versa" },
+    "copied_regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["a", "b", "description"],
+        "properties": {
+          "a": { "type": "string", "description": "Location in A, e.g. MyLinkedList.java:40-58" },
+          "b": { "type": "string", "description": "Location in B" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}
