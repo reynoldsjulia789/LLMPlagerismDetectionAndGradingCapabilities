@@ -1,6 +1,8 @@
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 
-public class HW8ListAdapter
+public class Hw8ListAdapter
 {
     private final Object   _object;
     private final Class<?> _class;
@@ -9,7 +11,7 @@ public class HW8ListAdapter
             "LinkedList", "CDoublyLinkedList", "CircularDoublyLinkedList", "MyLinkedList"
     };
 
-    public HW8ListAdapter()
+    public Hw8ListAdapter()
     {
         Class<?> found = null;
 
@@ -101,6 +103,39 @@ public class HW8ListAdapter
     public boolean isSorted()
     {
         return (boolean) invoke(new String[] {"isSorted"});
+    }
+
+    public boolean isEmpty()
+    {
+        try
+        {
+            return (boolean) invoke(new String[]{"isEmpty"});
+        }
+        catch (RuntimeException ignored)
+        {
+            int size = (int) invoke(new String[]{"size", "getSize"});
+            return size == 0;
+        }
+    }
+
+    public List<Object> getList()  // not all submissions appear to have toString, so this is a workaround
+    {
+        List<Object> result      = new ArrayList<>();
+        int          safetyLimit = 250000;
+
+        while (!isEmpty() && (result.size() < safetyLimit)) // prevents infinite looping
+        {
+            try
+            {
+                result.add(removeFirst());
+            }
+            catch (Exception ignored)
+            {
+                break;
+            }
+        }
+
+        return result;
     }
 
     @Override
