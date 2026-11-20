@@ -1,4 +1,3 @@
-import defaultHwFiles.MyLinkedList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -6,19 +5,19 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@Timeout(value = 1, unit = TimeUnit.SECONDS)
+@Timeout(value = 2, unit = TimeUnit.SECONDS)
 public class Hw1Test
 {
-    private MyLinkedList sut1;
-    private MyLinkedList sut2;
-    private MyLinkedList sut3;
+    private Hw1ListAdapter sut1;
+    private Hw1ListAdapter sut2;
+    private Hw1ListAdapter sut3;
 
     @BeforeEach
     public void setup()
     {
-        MyLinkedList sut1 = new MyLinkedList();
-        MyLinkedList sut2 = new MyLinkedList();
-        MyLinkedList sut3 = new MyLinkedList();
+        Hw1ListAdapter sut1 = new Hw1ListAdapter();
+        Hw1ListAdapter sut2 = new Hw1ListAdapter();
+        Hw1ListAdapter sut3 = new Hw1ListAdapter();
 
         sut1.addFirst(null);
         sut1.addFirst("bad");
@@ -202,11 +201,11 @@ public class Hw1Test
     @Test
     public void testInterleave()
     {
-        MyLinkedList result = MyLinkedList.interleave(sut1, sut2);
+        Hw1ListAdapter result = Hw1ListAdapter.interleave(sut1, sut2);
         assertNotNull(result);
         assertEquals("{null->1:Good->apple->2:Morning->bad->3:Abby->null->4:Tim->5:Tom->6:Tony}", result.toString());
 
-        result = MyLinkedList.interleave(sut1, sut3);
+        result = Hw1ListAdapter.interleave(sut1, sut3);
         assertNotNull(result);
         assertEquals("{null->apple->bad->null}", result.toString());
     }

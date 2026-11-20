@@ -1,22 +1,24 @@
-import defaultHwFiles.CDoublyLinkedList;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Timeout(value = 2, unit = TimeUnit.SECONDS)
 public class Hw2Test
 {
-    private CDoublyLinkedList sut1;
-    private CDoublyLinkedList sut2;
-    private CDoublyLinkedList sut3;
+    private Hw2ListAdapter sut1;
+    private Hw2ListAdapter sut2;
+    private Hw2ListAdapter sut3;
 
     @BeforeEach
     public void setup()
     {
-        sut1 = new CDoublyLinkedList();
-        sut2 = new CDoublyLinkedList();
-        sut3 = new CDoublyLinkedList();
+        sut1 = new Hw2ListAdapter();
+        sut2 = new Hw2ListAdapter();
+        sut3 = new Hw2ListAdapter();
 
         sut2.addFirst("6:Tony");
         sut2.addFirst("5:Tom");
@@ -119,7 +121,7 @@ public class Hw2Test
         sut3.retainAll(sut2);
         assertEquals("{6:Tony->6:Tony}", sut3.toString());
 
-        sut3 = new CDoublyLinkedList();
+        sut3 = new Hw2ListAdapter();
         sut3.addFirst(null);
         sut3.addFirst("bad");
         sut3.addFirst(null);
