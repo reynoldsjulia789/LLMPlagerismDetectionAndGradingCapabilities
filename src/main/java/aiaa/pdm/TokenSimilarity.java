@@ -24,18 +24,6 @@ public final class TokenSimilarity {
 
     public static final int DEFAULT_K = 5;
 
-    private static final Set<String> KEYWORDS = Set.of(
-            "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
-            "continue", "default", "do", "double", "else", "enum", "extends", "final", "finally", "float",
-            "for", "goto", "if", "implements", "import", "instanceof", "int", "interface", "long", "native",
-            "new", "package", "private", "protected", "public", "return", "short", "static", "strictfp",
-            "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
-            "volatile", "while", "true", "false", "null", "var", "record", "yield");
-
-    private static final String[] OPERATORS = {
-            ">>>=", "<<=", ">>=", ">>>", "...", "->", "::", "==", "!=", "<=", ">=", "&&", "||",
-            "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>"};
-
     private TokenSimilarity() {
     }
 
@@ -71,52 +59,14 @@ public final class TokenSimilarity {
     /** Lexes Java source into normalized tokens. */
     static List<String> tokenize(String src) {
         List<String> raw = new ArrayList<>();
-        int i = 0;
-        int n = src.length();
-        while (i < n) {
-            char c = src.charAt(i);
-            if (Character.isWhitespace(c)) {
-                i++;
-            } else if (src.startsWith("//", i)) {
-                while (i < n && src.charAt(i) != '\n') {
-                    i++;
-                }
-            } else if (src.startsWith("/*", i)) {
-                int end = src.indexOf("*/", i + 2);
-                i = end < 0 ? n : end + 2;
-            } else if (src.startsWith("\"\"\"", i)) {
-                int end = src.indexOf("\"\"\"", i + 3);
-                i = end < 0 ? n : end + 3;
-                raw.add("STR");
-            } else if (c == '"' || c == '\'') {
-                i++;
-                while (i < n && src.charAt(i) != c && src.charAt(i) != '\n') {
-                    i += src.charAt(i) == '\\' ? 2 : 1;
-                }
-                i++;
-                raw.add(c == '"' ? "STR" : "CHR");
-            } else if (Character.isDigit(c) || (c == '.' && i + 1 < n && Character.isDigit(src.charAt(i + 1)))) {
-                while (i < n && (Character.isLetterOrDigit(src.charAt(i)) || src.charAt(i) == '.' || src.charAt(i) == '_')) {
-                    i++;
-                }
-                raw.add("NUM");
-            } else if (Character.isJavaIdentifierStart(c)) {
-                int start = i;
-                while (i < n && Character.isJavaIdentifierPart(src.charAt(i))) {
-                    i++;
-                }
-                String word = src.substring(start, i);
-                raw.add(KEYWORDS.contains(word) ? word : "ID");
-            } else {
-                String op = String.valueOf(c);
-                for (String candidate : OPERATORS) {
-                    if (src.startsWith(candidate, i)) {
-                        op = candidate;
-                        break;
-                    }
-                }
-                raw.add(op);
-                i += op.length();
+        for (JavaLexer.Token t : JavaLexer.lex(src)) {
+            switch (t.kind()) {
+                case WHITESPACE, LINE_COMMENT, BLOCK_COMMENT -> { }
+                case STRING -> raw.add("STR");
+                case CHAR -> raw.add("CHR");
+                case NUMBER -> raw.add("NUM");
+                case IDENT -> raw.add("ID");
+                case KEYWORD, OPERATOR -> raw.add(t.text());
             }
         }
         // Drop import/package statements: they are boilerplate, not authored logic.

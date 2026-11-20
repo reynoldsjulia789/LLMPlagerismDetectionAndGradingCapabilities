@@ -26,6 +26,8 @@ public final class SourceFiles {
 
     private static final Pattern TYPE_DECL = Pattern.compile(
             "(?m)^\\s*(?:(?:public|final|abstract|sealed|non-sealed|static)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)");
+    private static final Pattern PUBLIC_TYPE_DECL = Pattern.compile(
+            "(?m)^\\s*public\\s+(?:(?:final|abstract|sealed|non-sealed|static)\\s+)*(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)");
     private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}");
     /** Identity markers, only inside comment lines so code such as {@code for (String name : names)} is untouched. */
     private static final Pattern IDENTITY_COMMENT = Pattern.compile(
@@ -119,9 +121,13 @@ public final class SourceFiles {
             n++;
             String base = e.getKey().substring(e.getKey().lastIndexOf('/') + 1);
             String stem = base.endsWith(".java") ? base.substring(0, base.length() - 5) : base;
+            // javac requires a public type to live in a file of the same name, so prefer it.
+            Matcher pub = PUBLIC_TYPE_DECL.matcher(e.getValue());
             Matcher m = TYPE_DECL.matcher(e.getValue());
             String name;
-            if (m.find()) {
+            if (pub.find()) {
+                name = pub.group(1);
+            } else if (m.find()) {
                 name = m.group(1).equals(stem) ? stem : m.group(1);
             } else {
                 name = "File" + n;

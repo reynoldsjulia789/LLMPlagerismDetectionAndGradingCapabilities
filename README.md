@@ -6,6 +6,7 @@ Java 25 / Maven project. Modules:
 |---|---|---|
 | `aiaa.llm` | Shared model adapter interface (`ModelAdapter`), `OpenAiAdapter`, `MockAdapter` | done |
 | `aiaa.pdm` | Plagiarism Detection Module (PDM) | core done |
+| `aiaa.synth` | Synthetic copy generator (labeled plagiarism test cases) | done (control flow needs an LLM) |
 | CAM / OCAA | Code assessment and output-based grading | TODO |
 
 ## Prerequisites
@@ -64,9 +65,45 @@ HW2: starter `hw2_description_startupcode.zip`, `--exclude-file Tester.java`. HW
 
 Prompts live in `src/main/resources/prompts/`. Each prompt version is the template name plus a hash of its text, so any edit to a frozen prompt shows up in the outputs.
 
+## Synthetic copy generator (`aiaa.synth`)
+
+Builds an anonymized, labeled dataset for one assignment in `synthetic-data/<assignment>/` (gitignored, since it contains student code):
+
+- `submissions/<assignment>-Sxx/`: the originals, identity-scrubbed, with display file names. The IDs match the PDM's anonymous IDs.
+- `submissions/<assignment>-Vxx/`: synthetic copies. Each one compiles; failed attempts are recorded but not written.
+- `manifest.csv`: provenance for every variant, including source, host, transformation, details, target and achieved amount copied, methods copied, seed, compile status, token Jaccard against the source and host, and LLM model and prompt version.
+- `generation_log.json`: configuration, seed, originals that don't compile, and counts by type and status.
+- `private/synth_id_map_<assignment>.csv`: the mapping from anonymous IDs to original folders.
+
+`--sources` (default 8) compiling submissions are picked with `--seed`, and each one yields 8 variants:
+
+| Transformation | How |
+|---|---|
+| `EXACT` | identical copy |
+| `RENAME` | consistent renaming of fields, locals and parameters across files (falls back to locals only if the result doesn't compile); method and type names are never renamed |
+| `REFORMAT` | new indent, brace style and operator spacing; the code-token sequence is verified unchanged |
+| `COMMENT_EDIT` | deletes, rewords and adds comments; code is untouched |
+| `REORDER` | shuffles the order of methods, constructors and nested types; fields stay in place |
+| `CONTROL_FLOW` | LLM rewrite (loops, inverted ifs, guard clauses, switch); retried with compiler errors fed back. Skipped without `--adapter openai` |
+| `STACKED` | rename + reorder + comment edits + reformat |
+| `PARTIAL` | replaces some of another student's (the host's) methods with the source's versions; target 25/50/75%, rotating across sources |
+
+**Amount copied** = fraction of the variant's substantive, non-starter lines (testers excluded) that came from the source. It is 1.0 for whole-program variants. A partial variant is derived from **both** its source (by the amount copied) and its host (the rest).
+
+```bash
+mvn -q compile exec:java -Dexec.mainClass=aiaa.synth.SynthMain -Dexec.args="--assignment F25Hw1 \
+  --submissions '$D/HomeworksSubmissions/F25Hw1' \
+  --starter '$D/HomeworkDescriptions/hw1_description_startupcode.zip' \
+  --exclude-file MyLinkedListTester.java"
+# then score it: PdmMain ... --submissions synthetic-data/F25Hw1/submissions --ids-from-folders
+```
+
+Add `--reference <dir>` to also derive "AI copying" variants from a verified AI reference solution.
+
 ### Not built yet (PDM)
 
-- Synthetic copy variants with provenance labels, and negative controls
+- Negative controls (independently written solutions)
+- Pair/student label files derived from the manifest
 - Dev/validation/test split manifests with seeds
 - Threshold sweep, threshold selection on validation data, and held-out metrics/charts
 - AI reference generation (references must be checked by hand before use)

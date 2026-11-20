@@ -113,7 +113,7 @@ class PdmRunnerTest {
         Path starter = write(dir.resolve("starter/MyLinkedList.java"), STARTER);
         PdmConfig keep = new PdmConfig("F25Hw1", subs, List.of(starter), Set.of("MyLinkedListTester.java"), List.of(),
                 StarterMode.KEEP, 0.5, 5, dir.resolve("out"), null, 1, null, null, null, 100_000, 0,
-                null, null, null, false);
+                null, null, null, false, false);
         PdmRunner.Summary s = new PdmRunner(keep, null).run();
         assertEquals(2, s.eligibleSubmissions());
         assertTrue(Files.readString(dir.resolve("out").resolve(PdmRunner.COMPARISONS_CSV))
@@ -123,7 +123,7 @@ class PdmRunnerTest {
     private static PdmConfig config(Path subs, Path starter, Path ref, Path out, Path idMap, boolean resume) {
         return new PdmConfig("F25Hw1", subs, List.of(starter), Set.of("MyLinkedListTester.java"), List.of(ref),
                 StarterMode.STRIP, 0.5, 5, out, idMap, 2, null, 500, null, 100_000, 0,
-                1.0, 2.0, "test", resume);
+                1.0, 2.0, "test", resume, false);
     }
 
     private static Path write(Path p, String content) throws IOException {

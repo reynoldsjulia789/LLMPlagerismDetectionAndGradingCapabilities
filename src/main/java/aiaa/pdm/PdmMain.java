@@ -42,6 +42,8 @@ public final class PdmMain {
               --parallelism <n>          concurrent LLM calls, default 4
               --max-llm-pairs <n>        only send the first n peer pairs (smoke tests)
               --resume                   reuse successful responses saved in the output folder
+              --ids-from-folders         use folder names as IDs (already-anonymized datasets such as
+                                         synthetic-data/<assignment>/submissions); no ID map is written
 
             Scoring / output:
               --alpha <a>                peer weight in S_i, default 0.5
@@ -84,6 +86,7 @@ public final class PdmMain {
         int parallelism = 4;
         Integer maxPairs = null;
         boolean resume = false;
+        boolean idsFromFolders = false;
         double alpha = 0.5;
         int tokenK = TokenSimilarity.DEFAULT_K;
         Path out = null;
@@ -114,6 +117,7 @@ public final class PdmMain {
                 case "--parallelism" -> parallelism = Integer.parseInt(value(args, ++i, a));
                 case "--max-llm-pairs" -> maxPairs = Integer.parseInt(value(args, ++i, a));
                 case "--resume" -> resume = true;
+                case "--ids-from-folders" -> idsFromFolders = true;
                 case "--alpha" -> alpha = Double.parseDouble(value(args, ++i, a));
                 case "--token-k" -> tokenK = Integer.parseInt(value(args, ++i, a));
                 case "--out" -> out = Path.of(value(args, ++i, a));
@@ -144,7 +148,7 @@ public final class PdmMain {
 
         PdmConfig config = new PdmConfig(assignment, submissions, starters, excluded, references, mode, alpha,
                 tokenK, out, idMap, parallelism, maxPairs, maxOutputTokens, temperature, maxInputChars, maxRetries,
-                priceIn, priceOut, pricingSource, resume);
+                priceIn, priceOut, pricingSource, resume, idsFromFolders);
         PdmRunner.Summary s = new PdmRunner(config, adapter).run();
         System.out.printf(Locale.ROOT, "PDM %s (%s): %d eligible, %d excluded, %d references, %d peer pairs%n",
                 assignment, mode, s.eligibleSubmissions(), s.excludedSubmissions(), s.references(), s.peerPairs());

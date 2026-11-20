@@ -9,10 +9,16 @@ import java.util.Map;
 /**
  * Removes instructor-provided starter code from a submission before similarity scoring.
  *
- * <p>Method: every starter line is normalized (trimmed, internal whitespace collapsed) and
- * counted. When filtering a submission, each matching normalized line is removed, but only
- * as many times as it occurs in the starter code (multiset matching), so a student's own
- * {@code return false;} survives even if the starter contains one placeholder of it.
+ * <p>Method: every starter line is reduced to a key made of its code tokens, so whitespace,
+ * operator spacing and trailing comments do not matter; a leading {@code }} and trailing
+ * {@code {} are dropped so brace placement does not matter either. Comment-only lines are keyed
+ * by their whitespace-collapsed comment text. When filtering a submission, each line whose key
+ * matches is removed, but only as many times as that key occurs in the starter code (multiset
+ * matching): if the starter has one {@code return false;} placeholder, at most one of the
+ * student's {@code return false;} lines is removed.
+ *
+ * <p>Known limitation: starter code whose identifiers were renamed, or whose statements were
+ * split or joined across lines, no longer matches and is counted as student-written.
  *
  * <p>Only "substantive" lines (containing a letter or digit) are removed; lines made only of
  * braces/punctuation are kept so the remaining code still reads as code. Blank lines are kept.
@@ -42,8 +48,32 @@ public final class StarterCodeFilter {
         return starterCounts.values().stream().mapToInt(Integer::intValue).sum();
     }
 
+    /** Layout-insensitive key of one line (see class comment). */
     static String normalize(String line) {
-        return line.strip().replaceAll("\\s+", " ");
+        List<String> code = new ArrayList<>();
+        String comment = null;
+        for (JavaLexer.Token t : JavaLexer.lex(line)) {
+            if (t.kind() == JavaLexer.Kind.WHITESPACE) {
+                continue;
+            }
+            if (t.comment()) {
+                if (comment == null) {
+                    comment = t.text().strip().replaceAll("\\s+", " ");
+                }
+                continue;
+            }
+            code.add(t.text());
+        }
+        while (!code.isEmpty() && code.getFirst().equals("}")) {
+            code.removeFirst();
+        }
+        while (!code.isEmpty() && code.getLast().equals("{")) {
+            code.removeLast();
+        }
+        if (!code.isEmpty()) {
+            return String.join(" ", code);
+        }
+        return comment == null ? "" : comment;
     }
 
     static boolean isSubstantive(String normalized) {

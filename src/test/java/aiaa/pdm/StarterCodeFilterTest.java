@@ -46,10 +46,29 @@ class StarterCodeFilterTest {
         assertFalse(kept.contains("addFirst"), "starter method signature removed");
         assertFalse(kept.contains("DO NOT change"), "starter comment removed");
         assertTrue(kept.contains("o.equals(n.data)"), "student logic kept");
-        // "return false;" differs from the starter line (which has a trailing comment), so it is kept.
-        assertTrue(kept.contains("return false;"));
+        // The starter's placeholder "return false; //change this..." has the same code tokens, so it
+        // consumes the student's single "return false;" (multiset: at most once).
+        assertFalse(kept.contains("return false;"));
         assertTrue(kept.contains("}"), "braces are never removed");
-        assertEquals(5, r.removedLines());
+        assertEquals(6, r.removedLines());
+    }
+
+    @Test
+    void reformattedOrRecommentedStarterCodeStillMatches() {
+        String student = """
+                public class MyLinkedList
+                {
+                  // Please DO NOT change this addFirst() method.
+                  public void addFirst(Object e)
+                  {
+                    size ++;   // count it
+                  }
+                }
+                """;
+        StarterCodeFilter f = StarterCodeFilter.fromSources(List.of(STARTER));
+        StarterCodeFilter.Result r = f.filter(SourceView.of("S1", Map.of("MyLinkedList.java", student)));
+        assertEquals(4, r.removedLines(), r.view().plainText());
+        assertEquals(0, r.view().substantiveLineCount());
     }
 
     @Test

@@ -9,12 +9,12 @@ import java.util.List;
 import java.util.Locale;
 
 /** Minimal RFC 4180 CSV writer (UTF-8, CRLF line endings for Excel compatibility). */
-final class Csv {
+public final class Csv {
 
     private Csv() {
     }
 
-    static void write(Path file, List<String> header, List<List<Object>> rows) {
+    public static void write(Path file, List<String> header, List<List<Object>> rows) {
         StringBuilder sb = new StringBuilder();
         appendRow(sb, header.stream().map(h -> (Object) h).toList());
         for (List<Object> row : rows) {

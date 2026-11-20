@@ -81,8 +81,11 @@ public final class PdmRunner {
 
         List<Path> folders = SourceFiles.submissionFolders(config.submissionsDir());
         for (int i = 0; i < folders.size(); i++) {
-            String anon = String.format("%s-S%02d", config.assignment(), i + 1);
-            idMap.put(anon, folders.get(i).getFileName().toString());
+            String folder = folders.get(i).getFileName().toString();
+            String anon = config.idsFromFolders() ? folder : String.format("%s-S%02d", config.assignment(), i + 1);
+            if (!config.idsFromFolders()) {
+                idMap.put(anon, folder);
+            }
             SourceView v = prepare(anon, "student", folders.get(i), filter, inventory);
             if (v != null) {
                 students.add(v);
@@ -450,7 +453,7 @@ public final class PdmRunner {
     }
 
     private void writeIdMap(Map<String, String> idMap) {
-        if (config.idMapFile() == null) {
+        if (config.idMapFile() == null || idMap.isEmpty()) {
             return;
         }
         List<List<Object>> rows = new ArrayList<>();

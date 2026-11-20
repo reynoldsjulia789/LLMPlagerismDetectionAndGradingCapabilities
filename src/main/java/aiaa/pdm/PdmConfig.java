@@ -27,6 +27,7 @@ import java.util.Set;
  * @param priceOutputPerMTok  USD per 1M output tokens, or null if unknown
  * @param pricingSource       where the prices came from (URL + date), recorded in the manifest
  * @param resume              reuse successful responses already saved in outDir
+ * @param idsFromFolders      use folder names as submission IDs (for already-anonymized datasets, e.g. synthetic-data)
  */
 public record PdmConfig(
         String assignment,
@@ -48,7 +49,8 @@ public record PdmConfig(
         Double priceInputPerMTok,
         Double priceOutputPerMTok,
         String pricingSource,
-        boolean resume) {
+        boolean resume,
+        boolean idsFromFolders) {
 
     public PdmConfig {
         if (alpha < 0 || alpha > 1) {
