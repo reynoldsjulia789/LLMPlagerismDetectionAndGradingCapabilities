@@ -1,12 +1,26 @@
+### Build output ###
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 .kotlin
 
-### Project specific files ###
-HomeworkSubmissions/*
-HomeworksSubmissions/*
+### Confidential student data - never commit ###
+# The whole test-data folder (submissions, homework descriptions, exams)
+/HomeworkSubmissions-test data/
+# Submission folders wherever they end up (the ** matches any depth)
+**/HomeworkSubmissions/
+**/HomeworksSubmissions/
+
+### AIAA outputs / private data ###
+# PDM results (contain anonymized scores and model responses)
+pdm-output/
+# Synthetic copy datasets (derived from student code - confidential)
+synthetic-data/
+# Anonymous-ID -> student folder mappings
+private/
+# Office lock files (e.g. ~$document.docx)
+~$*
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
