@@ -1,0 +1,15 @@
+Assignment: {{ASSIGNMENT}}
+Comparison type: peer (two student submissions to the same assignment)
+{{STARTER_NOTE}}
+
+Compare Submission A and Submission B.
+
+<<<SUBMISSION_A
+{{CODE_A}}
+SUBMISSION_A>>>
+
+<<<SUBMISSION_B
+{{CODE_B}}
+SUBMISSION_B>>>
+
+Return JSON matching the schema. In "copied_regions" list the most important matching regions (at most 8), with "a" and "b" as "FileName.java:start-end" locations; use an empty list if there are none.
