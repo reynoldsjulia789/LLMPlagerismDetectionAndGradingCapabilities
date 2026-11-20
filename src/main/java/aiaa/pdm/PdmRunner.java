@@ -1,5 +1,6 @@
 package aiaa.pdm;
 
+import aiaa.data.DataLayout;
 import aiaa.llm.ModelAdapter;
 import aiaa.llm.ModelResponse;
 import aiaa.pdm.ComparisonResult.Comparison;
@@ -51,6 +52,8 @@ public final class PdmRunner {
 
     private final PdmConfig config;
     private final ModelAdapter adapter;
+    /** Submission ID -> cohort label (references are not included). */
+    private final Map<String, String> cohortOf = new HashMap<>();
 
     /** @param adapter LLM adapter, or null to run the token baseline only */
     public PdmRunner(PdmConfig config, ModelAdapter adapter) {
@@ -59,7 +62,7 @@ public final class PdmRunner {
     }
 
     /** One row of inventory.csv: what was loaded and what was excluded, per submission/reference. */
-    record InventoryRow(String id, String role, String source, List<String> included, List<String> excludedFiles,
+    record InventoryRow(String id, String cohort, String role, String source, List<String> included, List<String> excludedFiles,
                         int redactions, int starterRemoved, int substantiveBefore, int substantiveAfter,
                         boolean eligible, String reason) {
     }
@@ -77,18 +80,27 @@ public final class PdmRunner {
         StarterCodeFilter filter = buildFilter();
         List<InventoryRow> inventory = new ArrayList<>();
         List<SourceView> students = new ArrayList<>();
-        Map<String, String> idMap = new LinkedHashMap<>();
+        Map<String, String[]> idMap = new LinkedHashMap<>(); // anon -> [cohort, folder]
+        cohortOf.clear();
 
-        List<Path> folders = SourceFiles.submissionFolders(config.submissionsDir());
-        for (int i = 0; i < folders.size(); i++) {
-            String folder = folders.get(i).getFileName().toString();
-            String anon = config.idsFromFolders() ? folder : String.format("%s-S%02d", config.assignment(), i + 1);
-            if (!config.idsFromFolders()) {
-                idMap.put(anon, folder);
-            }
-            SourceView v = prepare(anon, "student", folders.get(i), filter, inventory);
-            if (v != null) {
-                students.add(v);
+        for (DataLayout.Cohort cohort : config.cohorts()) {
+            List<Path> folders = SourceFiles.submissionFolders(cohort.dir());
+            for (int i = 0; i < folders.size(); i++) {
+                String folder = folders.get(i).getFileName().toString();
+                boolean alreadyAnonymous = folder.startsWith(cohort.label() + "-");
+                String anon = config.idsFromFolders() || alreadyAnonymous
+                        ? folder : String.format("%s-S%02d", cohort.label(), i + 1);
+                if (cohortOf.putIfAbsent(anon, cohort.label()) != null) {
+                    throw new IllegalArgumentException("Duplicate submission ID " + anon
+                            + " (two cohorts with the same folder names?)");
+                }
+                if (!anon.equals(folder)) {
+                    idMap.put(anon, new String[]{cohort.label(), folder});
+                }
+                SourceView v = prepare(anon, "student", folders.get(i), filter, inventory);
+                if (v != null) {
+                    students.add(v);
+                }
             }
         }
         List<SourceView> references = new ArrayList<>();
@@ -119,10 +131,13 @@ public final class PdmRunner {
         }
 
         List<String> ids = students.stream().map(SourceView::id).toList();
-        List<StudentScore> scores = new ArrayList<>(PlagiarismScorer.score(ids, results, Method.TOKEN, config.alpha()));
+        List<StudentScore> scores = new ArrayList<>(
+                PlagiarismScorer.score(ids, results, Method.TOKEN, config.alpha(), cohortOf));
         if (adapter != null) {
-            scores.addAll(PlagiarismScorer.score(ids, results, Method.LLM, config.alpha()));
+            scores.addAll(PlagiarismScorer.score(ids, results, Method.LLM, config.alpha(), cohortOf));
         }
+        long crossPairs = results.stream().filter(r -> r.method() == Method.TOKEN && r.comparison() == Comparison.PEER
+                && !cohortOf.get(r.subA()).equals(cohortOf.get(r.subB()))).count();
 
         Instant finished = Instant.now();
         long wallMs = finished.toEpochMilli() - started.toEpochMilli();
@@ -132,7 +147,7 @@ public final class PdmRunner {
         writeIdMap(idMap);
         long excluded = inventory.stream().filter(r -> r.role().equals("student") && !r.eligible()).count();
         writeManifest(runId, started, finished, students.size(), (int) excluded, references.size(), peerPairs,
-                stats, filter);
+                (int) crossPairs, stats, filter);
 
         return new Summary(config.outDir(), students.size(), (int) excluded, references.size(), peerPairs,
                 stats.calls.get(), stats.failures.get(), stats.inputTokens(), stats.outputTokens(),
@@ -153,7 +168,7 @@ public final class PdmRunner {
     private SourceView prepare(String id, String role, Path source, StarterCodeFilter filter, List<InventoryRow> inventory) {
         Map<String, String> raw = SourceFiles.readJava(source);
         if (raw.isEmpty()) {
-            inventory.add(new InventoryRow(id, role, source.getFileName().toString(), List.of(), List.of(),
+            inventory.add(new InventoryRow(id, cohortOf.getOrDefault(id, ""), role, source.getFileName().toString(), List.of(), List.of(),
                     0, 0, 0, 0, false, "no .java files"));
             return null;
         }
@@ -182,7 +197,7 @@ public final class PdmRunner {
         String reason = eligible ? "" : (files.isEmpty() ? "only excluded files" : "no code remaining after starter exclusion");
         // Folder names stay out of the public inventory for students (they contain student IDs).
         String shownSource = role.equals("student") ? "" : source.getFileName().toString();
-        inventory.add(new InventoryRow(id, role, shownSource, List.copyOf(files.keySet()), excludedFiles,
+        inventory.add(new InventoryRow(id, cohortOf.getOrDefault(id, ""), role, shownSource, List.copyOf(files.keySet()), excludedFiles,
                 redactions, removed, before, after, eligible, reason));
         return eligible ? view : null;
     }
@@ -381,13 +396,18 @@ public final class PdmRunner {
 
     private void writeComparisons(String runId, List<ComparisonResult> results) {
         List<String> header = List.of("run_id", "assignment", "starter_mode", "comparison", "method", "sub_a", "sub_b",
-                "similarity", "containment", "structure", "syntax", "tokens", "logic", "status", "error",
+                "cohort_a", "cohort_b", "cohort_relation", "similarity", "containment", "structure", "syntax", "tokens", "logic", "status", "error",
                 "evidence", "rationale", "model_provider", "model_id", "model_returned", "prompt_version",
                 "input_tokens", "output_tokens", "latency_ms", "retries", "cost_usd");
         List<List<Object>> rows = new ArrayList<>();
         for (ComparisonResult r : results) {
             List<Object> row = new ArrayList<>(List.of(runId, config.assignment(), config.starterMode().name(),
                     r.comparison().name(), r.method().name(), r.subA(), r.subB()));
+            String ca = cohortOf.getOrDefault(r.subA(), "");
+            String cb = cohortOf.getOrDefault(r.subB(), "");
+            row.add(ca);
+            row.add(cb);
+            row.add(r.comparison() == Comparison.AI_REFERENCE ? "REFERENCE" : (ca.equals(cb) ? "WITHIN" : "CROSS"));
             row.add(r.similarity());
             row.add(r.containment());
             row.add(r.structure());
@@ -413,8 +433,9 @@ public final class PdmRunner {
     }
 
     private void writeScores(String runId, List<StudentScore> scores) {
-        List<String> header = List.of("run_id", "assignment", "starter_mode", "method", "submission",
-                "max_peer_similarity", "max_peer_partner", "peer_ok", "peer_failed",
+        List<String> header = List.of("run_id", "assignment", "starter_mode", "method", "submission", "cohort",
+                "max_peer_similarity", "max_peer_partner", "max_peer_within_cohort", "max_peer_cross_cohort",
+                "peer_ok", "peer_failed",
                 "ai_similarity", "ai_reference", "ai_ok", "ai_failed", "alpha", "combined_score");
         List<List<Object>> rows = new ArrayList<>();
         for (StudentScore s : scores) {
@@ -424,8 +445,11 @@ public final class PdmRunner {
             row.add(config.starterMode().name());
             row.add(s.method().name());
             row.add(s.submission());
+            row.add(cohortOf.get(s.submission()));
             row.add(s.maxPeer());
             row.add(s.maxPeerPartner());
+            row.add(s.maxPeerWithin());
+            row.add(s.maxPeerCross());
             row.add(s.peerOk());
             row.add(s.peerFailed());
             row.add(s.aiSimilarity());
@@ -440,29 +464,30 @@ public final class PdmRunner {
     }
 
     private void writeInventory(String runId, List<InventoryRow> inventory) {
-        List<String> header = List.of("run_id", "assignment", "starter_mode", "id", "role", "source",
+        List<String> header = List.of("run_id", "assignment", "starter_mode", "id", "cohort", "role", "source",
                 "files_included", "files_excluded", "identity_redactions", "starter_lines_removed",
                 "substantive_lines_before", "substantive_lines_after", "eligible", "exclusion_reason");
         List<List<Object>> rows = new ArrayList<>();
         for (InventoryRow r : inventory) {
-            rows.add(List.of(runId, config.assignment(), config.starterMode().name(), r.id(), r.role(), r.source(),
+            rows.add(List.of(runId, config.assignment(), config.starterMode().name(), r.id(), r.cohort(), r.role(), r.source(),
                     String.join(";", r.included()), String.join(";", r.excludedFiles()), r.redactions(),
                     r.starterRemoved(), r.substantiveBefore(), r.substantiveAfter(), r.eligible(), r.reason()));
         }
         Csv.write(config.outDir().resolve(INVENTORY_CSV), header, rows);
     }
 
-    private void writeIdMap(Map<String, String> idMap) {
+    private void writeIdMap(Map<String, String[]> idMap) {
         if (config.idMapFile() == null || idMap.isEmpty()) {
             return;
         }
         List<List<Object>> rows = new ArrayList<>();
-        idMap.forEach((k, v) -> rows.add(List.of(k, v)));
-        Csv.write(config.idMapFile(), List.of("anon_id", "source_folder"), rows);
+        idMap.forEach((k, v) -> rows.add(List.of(k, v[0], v[1])));
+        Csv.write(config.idMapFile(), List.of("anon_id", "cohort", "source_folder"), rows);
     }
 
     private void writeManifest(String runId, Instant started, Instant finished, int eligible, int excluded,
-                               int references, int peerPairs, LlmStats stats, StarterCodeFilter filter) {
+                               int references, int peerPairs, int crossPairs, LlmStats stats,
+                               StarterCodeFilter filter) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("run_id", runId);
         m.put("module", "PDM");
@@ -473,7 +498,11 @@ public final class PdmRunner {
         m.put("java_version", System.getProperty("java.version"));
 
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("submissions_dir", config.submissionsDir().toString());
+        List<Map<String, String>> cohorts = new ArrayList<>();
+        for (DataLayout.Cohort c : config.cohorts()) {
+            cohorts.add(Map.of("label", c.label(), "dir", c.dir().toString()));
+        }
+        input.put("cohorts", cohorts);
         input.put("starter_paths", config.starterPaths().stream().map(Path::toString).toList());
         input.put("starter_mode", config.starterMode().name());
         input.put("starter_substantive_lines", filter == null ? 0 : filter.starterLineCount());
@@ -486,6 +515,8 @@ public final class PdmRunner {
         counts.put("excluded_submissions", excluded);
         counts.put("references", references);
         counts.put("peer_pairs", peerPairs);
+        counts.put("peer_pairs_within_cohort", peerPairs - crossPairs);
+        counts.put("peer_pairs_cross_cohort", crossPairs);
         counts.put("ai_reference_comparisons", eligible * references);
         m.put("counts", counts);
 

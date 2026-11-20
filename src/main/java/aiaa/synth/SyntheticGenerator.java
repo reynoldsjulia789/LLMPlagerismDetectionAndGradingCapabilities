@@ -31,16 +31,18 @@ import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
- * Builds a labeled synthetic-copy dataset for one assignment:
+ * Builds a labeled synthetic-copy dataset for one cohort of one homework. The output folder is
+ * itself a cohort folder in the shared layout ({@code <root>/HomeworkSubmissions/<Hw>/<cohort>/}),
+ * so the generated root can be screened like the real data:
  * <ul>
  *   <li>copies the originals (identity-scrubbed, anonymous IDs, display file names) to
- *       {@code submissions/<assignment>-Sxx/}</li>
+ *       {@code <assignment>-Sxx/}</li>
  *   <li>derives variants from {@code sourceCount} randomly chosen compiling submissions (and from
  *       each AI reference): exact, renamed, reformatted, comment-edited, reordered, equivalent control
  *       flow (LLM), stacked, and partial (method splice at 25/50/75%)</li>
  *   <li>keeps a variant only if it compiles; records provenance in {@code manifest.csv}</li>
  * </ul>
- * The output folder can be passed to the PDM with {@code --ids-from-folders}.
+ * Screen the result with {@code PdmMain --data-root synthetic-data --homework <Hw>}.
  */
 public final class SyntheticGenerator {
 
@@ -50,7 +52,6 @@ public final class SyntheticGenerator {
 
     static final String MANIFEST_CSV = "manifest.csv";
     static final String LOG_JSON = "generation_log.json";
-    static final String SUBMISSIONS_DIR = "submissions";
     static final String GENERATOR_VERSION = "synth-v1";
     private static final double[] PARTIAL_LEVELS = {0.25, 0.50, 0.75};
     private static final int MAX_PARTIAL_HOSTS = 8;
@@ -359,21 +360,27 @@ public final class SyntheticGenerator {
                     throw new IllegalArgumentException("Output folder " + out + " is not empty and was not created by "
                             + "this generator; choose another --out");
                 }
-                Path subs = out.resolve(SUBMISSIONS_DIR);
-                if (Files.isDirectory(subs)) {
-                    try (Stream<Path> walk = Files.walk(subs)) {
-                        walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                // Regenerating: remove only the submission folders this generator wrote (<assignment>-Sxx / -Vxx).
+                String prefix = config.assignment() + "-";
+                try (Stream<Path> s = Files.list(out)) {
+                    for (Path dir : s.filter(Files::isDirectory).toList()) {
+                        String name = dir.getFileName().toString();
+                        if (name.startsWith(prefix) && name.substring(prefix.length()).matches("[SV]\\d+")) {
+                            try (Stream<Path> walk = Files.walk(dir)) {
+                                walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                            }
+                        }
                     }
                 }
             }
-            Files.createDirectories(out.resolve(SUBMISSIONS_DIR));
+            Files.createDirectories(out);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     private void write(String id, Map<String, String> files) {
-        Path dir = config.outDir().resolve(SUBMISSIONS_DIR).resolve(id);
+        Path dir = config.outDir().resolve(id);
         try {
             Files.createDirectories(dir);
             for (Map.Entry<String, String> e : files.entrySet()) {

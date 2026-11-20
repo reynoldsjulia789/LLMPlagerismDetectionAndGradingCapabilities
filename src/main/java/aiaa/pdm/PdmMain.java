@@ -1,5 +1,6 @@
 package aiaa.pdm;
 
+import aiaa.data.DataLayout;
 import aiaa.llm.MockAdapter;
 import aiaa.llm.ModelAdapter;
 import aiaa.llm.OpenAiAdapter;
@@ -18,13 +19,22 @@ public final class PdmMain {
             Plagiarism Detection Module (PDM)
 
             Usage:
-              PdmMain --assignment <label> --submissions <dir> [options]
+              PdmMain --homework Hw1 [--cohort F25] [options]          (dataset layout, see README)
+              PdmMain --assignment <label> --submissions <dir>... [options]
 
-            Required:
-              --assignment <label>       e.g. F25Hw1 (only submissions in one folder are compared)
-              --submissions <dir>        folder containing one subfolder per submission
+            Dataset layout (<root>/HomeworkSubmissions/<Hw>/<Cohort><Hw>/<submission>/):
+              --homework <Hw1|Hw2|Hw8>   homework to screen; fills in its starter code and tester exclusions
+              --cohort <F25|Sp26|...>    one cohort only; default: all cohorts of the homework, pooled,
+                                         with every pair tagged WITHIN or CROSS cohort
+              --data-root <dir>          default "HomeworkSubmissions-test data"; a generated synthetic
+                                         dataset (e.g. synthetic-data) can be used as the root too
 
-            Starter material:
+            Explicit folders (instead of --homework):
+              --assignment <label>       run label, e.g. F25Hw1
+              --submissions <dir>        folder with one subfolder per submission (repeatable: each folder is
+                                         a cohort labeled by its folder name, pooled like --homework)
+
+            Starter material (override the --homework defaults):
               --starter <path>           starter code dir/zip/file (repeatable)
               --exclude-file <name>      file dropped in strip mode, e.g. MyLinkedListTester.java (repeatable)
               --starter-mode strip|keep  default strip; use keep for the without-exclusion comparison
@@ -70,9 +80,12 @@ public final class PdmMain {
         }
     }
 
-    static PdmRunner.Summary run(String[] args) {
+    public static PdmRunner.Summary run(String[] args) {
         String assignment = null;
-        Path submissions = null;
+        List<Path> submissions = new ArrayList<>();
+        String homework = null;
+        String cohort = null;
+        Path dataRoot = Path.of(DataLayout.DEFAULT_ROOT);
         List<Path> starters = new ArrayList<>();
         Set<String> excluded = new LinkedHashSet<>();
         List<Path> references = new ArrayList<>();
@@ -103,7 +116,10 @@ public final class PdmMain {
                     return null;
                 }
                 case "--assignment" -> assignment = value(args, ++i, a);
-                case "--submissions" -> submissions = Path.of(value(args, ++i, a));
+                case "--submissions" -> submissions.add(Path.of(value(args, ++i, a)));
+                case "--homework" -> homework = value(args, ++i, a);
+                case "--cohort" -> cohort = value(args, ++i, a);
+                case "--data-root" -> dataRoot = Path.of(value(args, ++i, a));
                 case "--starter" -> starters.add(Path.of(value(args, ++i, a)));
                 case "--exclude-file" -> excluded.add(value(args, ++i, a));
                 case "--starter-mode" -> mode = StarterMode.valueOf(value(args, ++i, a).toUpperCase(Locale.ROOT));
@@ -128,8 +144,29 @@ public final class PdmMain {
                 default -> throw new IllegalArgumentException("Unknown option " + a);
             }
         }
-        if (assignment == null || submissions == null) {
-            throw new IllegalArgumentException("--assignment and --submissions are required");
+        List<DataLayout.Cohort> cohorts = new ArrayList<>();
+        if (homework != null) {
+            if (!submissions.isEmpty()) {
+                throw new IllegalArgumentException("use either --homework or --submissions, not both");
+            }
+            DataLayout.Selection sel = DataLayout.resolve(dataRoot, homework, cohort);
+            cohorts.addAll(sel.cohorts());
+            if (assignment == null) {
+                assignment = sel.label();
+            }
+            if (starters.isEmpty()) {
+                starters.addAll(sel.starterPaths());
+            }
+            if (excluded.isEmpty()) {
+                excluded.addAll(sel.excludedFiles());
+            }
+        } else {
+            if (assignment == null || submissions.isEmpty()) {
+                throw new IllegalArgumentException("give --homework, or --assignment and --submissions");
+            }
+            for (Path p : submissions) {
+                cohorts.add(new DataLayout.Cohort(p.getFileName().toString(), p));
+            }
         }
         if (out == null) {
             out = Path.of("pdm-output", assignment, mode.name().toLowerCase(Locale.ROOT));
@@ -146,12 +183,14 @@ public final class PdmMain {
             default -> throw new IllegalArgumentException("Unknown adapter " + adapterName);
         };
 
-        PdmConfig config = new PdmConfig(assignment, submissions, starters, excluded, references, mode, alpha,
+        PdmConfig config = new PdmConfig(assignment, cohorts, starters, excluded, references, mode, alpha,
                 tokenK, out, idMap, parallelism, maxPairs, maxOutputTokens, temperature, maxInputChars, maxRetries,
                 priceIn, priceOut, pricingSource, resume, idsFromFolders);
         PdmRunner.Summary s = new PdmRunner(config, adapter).run();
-        System.out.printf(Locale.ROOT, "PDM %s (%s): %d eligible, %d excluded, %d references, %d peer pairs%n",
-                assignment, mode, s.eligibleSubmissions(), s.excludedSubmissions(), s.references(), s.peerPairs());
+        System.out.printf(Locale.ROOT, "PDM %s (%s): %d cohort(s) %s, %d eligible, %d excluded, %d references, "
+                        + "%d peer pairs%n", assignment, mode, cohorts.size(),
+                cohorts.stream().map(DataLayout.Cohort::label).toList(), s.eligibleSubmissions(),
+                s.excludedSubmissions(), s.references(), s.peerPairs());
         if (adapter != null) {
             System.out.printf(Locale.ROOT, "LLM: %d calls, %d failures, %d in / %d out tokens%s%n",
                     s.llmCalls(), s.llmFailures(), s.inputTokens(), s.outputTokens(),
