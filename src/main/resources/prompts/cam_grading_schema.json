@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method_scores", "total_score", "overall_feedback"],
+  "properties": {
+    "method_scores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["method_name", "score", "feedback"],
+        "properties": {
+          "method_name": { "type": "string" },
+          "score": { "type": "number", "description": "0-100 method grade" },
+          "feedback": { "type": "string", "description": "Brief method-level feedback" }
+        }
+      }
+    },
+    "total_score": { "type": "number", "description": "0-100 combined submission code grade" },
+    "overall_feedback": { "type": "string", "description": "Summary feedback (at most 120 words)" }
+  }
+}

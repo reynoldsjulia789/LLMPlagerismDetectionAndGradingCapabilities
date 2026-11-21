@@ -5,6 +5,9 @@ target/
 !**/src/test/**/target/
 .kotlin
 
+### JAR file for standalone junit ###
+lib/*.jar
+
 ### Confidential student data - never commit ###
 # The whole test-data folder (submissions, homework descriptions, exams)
 /HomeworkSubmissions-test data/
