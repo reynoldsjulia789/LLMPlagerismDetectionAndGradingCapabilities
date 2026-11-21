@@ -526,6 +526,7 @@ public final class SyntheticGenerator {
         if (rewriter != null) {
             m.put("llm_provider", adapter.provider());
             m.put("llm_model_id", adapter.modelId());
+            m.put("llm_effort", (adapter instanceof aiaa.llm.AnthropicAdapter aa ? (aa.effort() == null ? "model default" : aa.effort()) : "n/a"));
             m.put("llm_prompt_version", rewriter.promptVersion());
             m.put("llm_temperature", config.temperature() == null ? "provider default (not sent)" : config.temperature());
             m.put("llm_max_output_tokens", config.maxOutputTokens());

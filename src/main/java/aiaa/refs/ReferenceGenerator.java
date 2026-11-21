@@ -168,6 +168,7 @@ public final class ReferenceGenerator {
         p.put("created_utc", Instant.now().toString());
         p.put("model_provider", adapter.provider());
         p.put("model_id", adapter.modelId());
+        p.put("effort", (adapter instanceof aiaa.llm.AnthropicAdapter aa ? (aa.effort() == null ? "model default" : aa.effort()) : "n/a"));
         p.put("model_returned", returnedModel);
         p.put("prompt_version", promptVersion());
         if (temperature == null) {

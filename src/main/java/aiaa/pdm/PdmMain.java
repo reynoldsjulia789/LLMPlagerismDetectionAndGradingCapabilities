@@ -46,10 +46,11 @@ public final class PdmMain {
               --reference <path>         AI-generated reference solution dir/zip/file (repeatable)
 
             Similarity model:
-              --adapter none|mock|openai default none (token baseline only)
-              --model <id>               exact model ID (required for openai; recorded in outputs)
+              --adapter <name>           none (token baseline only, default) | anthropic | openai | mock
+              --model <id>               exact model ID (required for anthropic/openai; recorded in outputs)
+              --effort <level>           Claude only: low|medium|high|xhigh|max (default: the model's own default)
               --temperature <t>          omitted from requests unless given
-              --max-output-tokens <n>    default 1500
+              --max-output-tokens <n>    default 16000 (Claude thinks before answering; thinking counts here)
               --max-input-chars <n>      default 120000; larger prompts are skipped, never truncated
               --max-retries <n>          default 4
               --parallelism <n>          concurrent LLM calls, default 4
@@ -70,7 +71,8 @@ public final class PdmMain {
               --price-out <usd>          USD per 1M output tokens
               --pricing-source <text>    where the prices came from (URL and date)
 
-            Environment (openai): OPENAI_API_KEY (required), OPENAI_BASE_URL (optional)
+            Environment: ANTHROPIC_API_KEY for --adapter anthropic; OPENAI_API_KEY (+ optional OPENAI_BASE_URL)
+            for --adapter openai. Keys are read from the environment only, never from files in the repo.
             """;
 
     private PdmMain() {
@@ -99,8 +101,9 @@ public final class PdmMain {
         StarterMode mode = StarterMode.STRIP;
         String adapterName = "none";
         String model = null;
+        String effort = null;
         Double temperature = null;
-        Integer maxOutputTokens = 1500;
+        Integer maxOutputTokens = 16_000;
         int maxInputChars = 120_000;
         int maxRetries = 4;
         int parallelism = 4;
@@ -137,6 +140,7 @@ public final class PdmMain {
                 case "--reference" -> references.add(Path.of(value(args, ++i, a)));
                 case "--adapter" -> adapterName = value(args, ++i, a).toLowerCase(Locale.ROOT);
                 case "--model" -> model = value(args, ++i, a);
+                case "--effort" -> effort = value(args, ++i, a);
                 case "--temperature" -> temperature = Double.parseDouble(value(args, ++i, a));
                 case "--max-output-tokens" -> maxOutputTokens = Integer.parseInt(value(args, ++i, a));
                 case "--max-input-chars" -> maxInputChars = Integer.parseInt(value(args, ++i, a));
@@ -203,6 +207,7 @@ public final class PdmMain {
             case "none" -> null;
             case "mock" -> new MockAdapter(model == null ? "mock-token-jaccard" : model,
                     LlmSimilarityJudge.mockResponder());
+            case "anthropic" -> aiaa.llm.AnthropicAdapter.fromEnvironment(model, effort, maxRetries);
             case "openai" -> OpenAiAdapter.fromEnvironment(model, maxRetries);
             default -> throw new IllegalArgumentException("Unknown adapter " + adapterName);
         };

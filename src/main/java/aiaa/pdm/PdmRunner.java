@@ -600,6 +600,7 @@ public final class PdmRunner {
             llm.put("enabled", true);
             llm.put("provider", adapter.provider());
             llm.put("model_id", adapter.modelId());
+            llm.put("effort", (adapter instanceof aiaa.llm.AnthropicAdapter aa ? (aa.effort() == null ? "model default" : aa.effort()) : "n/a"));
             llm.put("prompt_version_peer", judge.promptVersion(Comparison.PEER));
             llm.put("prompt_version_ai_reference", judge.promptVersion(Comparison.AI_REFERENCE));
             llm.put("temperature", config.temperature() == null ? "provider default (not sent)" : config.temperature());

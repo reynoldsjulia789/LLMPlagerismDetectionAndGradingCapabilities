@@ -11,7 +11,7 @@
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <jackson.version>2.18.2</jackson.version>
+        <jackson.version>2.19.4</jackson.version> <!-- must match the Anthropic SDK (anthropic-java 3.3.0 uses 2.19.4) -->
         <junit.version>5.11.4</junit.version>
         <exec.mainClass>aiaa.pdm.PdmMain</exec.mainClass>
     </properties>
@@ -21,6 +21,11 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>3.3.0</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

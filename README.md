@@ -4,7 +4,7 @@ Java 25 / Maven project. Modules:
 
 | Package | Purpose | Status |
 |---|---|---|
-| `aiaa.llm` | Shared model adapter interface (`ModelAdapter`), `OpenAiAdapter`, `MockAdapter` | done |
+| `aiaa.llm` | Shared model adapter interface (`ModelAdapter`), `AnthropicAdapter` (Claude, used for this project), `OpenAiAdapter`, `MockAdapter` | done |
 | `aiaa.pdm` | Plagiarism Detection Module (PDM) | core done |
 | `aiaa.synth` | Synthetic copy generator (labeled plagiarism test cases) | done (control flow needs an LLM) |
 | `aiaa.data` | Shared dataset layout, homework defaults, assignment materials | done |
@@ -17,7 +17,7 @@ Java 25 / Maven project. Modules:
 ## Prerequisites
 
 - JDK 25. Maven is **not** needed: `./mvnw` (`mvnw.cmd` on Windows) downloads Maven 3.9.9 on first use.
-- For real LLM runs: an OpenAI API key in `OPENAI_API_KEY` (optional `OPENAI_BASE_URL`). Never commit keys.
+- For real LLM runs: an Anthropic API key in `ANTHROPIC_API_KEY`. See [Model access](#model-access-claude) below. Never commit keys.
 
 ```bash
 ./mvnw test                                   # all unit + end-to-end tests (offline, MockAdapter)
@@ -34,6 +34,62 @@ Every tool has `--help`. Run a tool other than the PDM with `-Dexec.mainClass=ai
 ```
 
 This runs the complete detection workflow on `demo/`: copies → labels and split → PDM with and without starter exclusion → threshold selection → one held-out evaluation. It regenerates everything in `demo-output/`. `demo/` is a made-up toy homework (an int `Stack`) with 12 synthetic "submissions" and 4 negative controls. It contains no course material or student data. **Demo results are not research results**, and the full research evaluation runs on the real data as described below.
+
+## Model access (Claude)
+
+> **Deviation from the specification.** The spec requires OpenAI GPT (or a three-family comparison through AWS Bedrock). No working, paid OpenAI key was available to the group, so with both group members' agreement this project uses **Anthropic Claude** through the Anthropic API, pending the instructor's approval. Every run records the exact provider and model, and `--adapter openai` still works unchanged if a paid OpenAI key becomes available. The Word report must state this deviation.
+
+### 1. Store the key (once per computer)
+
+The tools read the key **only** from the `ANTHROPIC_API_KEY` environment variable. It is never stored in a file in the repository, so it cannot be committed by accident.
+
+**Windows** (keeps the key out of shell history):
+1. Press Start, type **Edit environment variables for your account**, and open it.
+2. Under *User variables*, click **New...**. Use the name `ANTHROPIC_API_KEY` and paste your key (it starts with `sk-ant-`) as the value.
+3. **Close and reopen VS Code and any terminals.** Programs only see variables set after they started.
+
+**macOS / Linux:** add `export ANTHROPIC_API_KEY=...` to your shell profile (`~/.zshrc` or `~/.bashrc`), then open a new terminal.
+
+Check it without revealing it (PowerShell): `if ($env:ANTHROPIC_API_KEY) { "set" } else { "not set" }`
+
+### 2. Choose the model and effort
+
+Pass the model with `--model`. It is recorded in every output.
+
+| Model | `--model` | Input / output, $ per 1M tokens |
+|---|---|---|
+| Claude Opus 5.5 (recommended default) | `claude-opus-5-5` | $4 / $20 |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | $2 / $10 |
+| Claude Haiku 5.5 | `claude-haiku-5-5` | $0.10 / $0.50 |
+
+Prices are from https://platform.claude.com/docs/en/about-claude/pricing. Check them on the day of the run and pass `--pricing-source "<that URL>, <date>"`. Pick one model for all PDM runs; changing models after thresholds are frozen invalidates them.
+
+- **Thinking:** Claude reasons before answering. That reasoning is billed as output tokens and counts toward `--max-output-tokens` (default 16000).
+- **Effort:** `--effort low|medium|high|xhigh|max` controls how much it reasons. Without the flag, the model's default applies (`medium` for Opus 5.5). Effort is recorded in the run manifest.
+- **Dry-run caution:** the `--dry-run` estimates assume 400 output tokens per call, which is too low with thinking. After the smoke test, read the average output tokens per call from `run_manifest.json` and pass it as `--assumed-output-tokens`.
+- **Not supported:** current Claude models reject `--temperature`, so the adapter reports it as an unsupported setting instead of sending it. Results are therefore not deterministic, which is why the spec's stability repeats matter.
+- **Refusals** are recorded as failed comparisons. The adapter deliberately does **not** fall back to a different model, so every result belongs to exactly one model.
+
+### 3. Smoke test (a few cents)
+
+PowerShell. Note the quotes around `-Dexec.args`:
+```powershell
+./mvnw.cmd -q compile exec:java "-Dexec.args=--homework Hw1 --adapter anthropic --model claude-opus-5-5 --max-llm-pairs 5 --out pdm-output/smoke/Hw1 --price-in 4 --price-out 20 --pricing-source 'https://platform.claude.com/docs/en/about-claude/pricing, <date>'"
+```
+Success looks like `LLM: 5 calls, 0 failures`. Then check the `LLM` rows in `comparisons.csv`, and `llm.model_returned` and the token totals in `run_manifest.json`.
+
+### 4. Sharing access with a group member (one project only)
+
+**Never send the key itself** in chat, e-mail or a commit. Give your partner **their own key inside a project workspace with a spend cap**. You stay in control, and nothing else in your account is exposed. The steps below are in the Claude Console (platform.claude.com) and require you to be an organization admin.
+
+1. **Create a workspace for the project:** Settings → [Workspaces](https://platform.claude.com/settings/workspaces) → **Create workspace** (for example `aiaa-project`).
+2. **Cap its spending:** Settings → [Spend limits](https://platform.claude.com/settings/spend-limits) → under **Workspace limits**, choose the workspace → **Set limit** next to **Monthly spend limit**. Optionally add an e-mail notification. Organization-wide limits still apply on top.
+3. **Invite your partner** on the [Members](https://platform.claude.com/settings/members) page with the least-privileged organization role, **User**. Organization users and developers see no workspace until an admin adds them.
+4. **Add them to the project workspace only**, with the role **Workspace Developer**. That role can create and manage API keys and use the API in that workspace, but not change workspace settings, members or limits.
+5. Your partner signs in, creates **their own** API key in `aiaa-project`, and stores it as `ANTHROPIC_API_KEY` on their computer as in step 1. Each of you should also create your own project key in that workspace, so all project usage is counted against its spend limit.
+6. **Revoking access:** remove the member from the workspace on the Members page (choose the workspace in the **Workspace** dropdown first; with **All** selected, the button removes them from the whole organization), or archive their key. At the end of the project, **Archive workspace** deactivates the workspace and every key in it. This cannot be undone.
+
+Usage is billed to your organization's credits. The workspace spend limit is what keeps the project within the amount you agree on.
 
 ## Dataset layout (`aiaa.data`)
 
@@ -65,7 +121,7 @@ For one homework at a time, the PDM:
 1. **Loads and anonymizes.** By default all cohorts of the homework are **pooled**: every pair is compared, including across terms (a Spring student copying a Fall submission), and each pair is tagged `WITHIN` or `CROSS` cohort. `--cohort F25` restricts a run to one cohort. Each submission gets an anonymous ID (`F25Hw1-S01`, `Sp26Hw1-S03`, ...); folders already named that way (generated datasets) keep their names. The mapping from anonymous ID to cohort and folder is written only to `--id-map` (default `private/`, which is gitignored). Files are shown under their declared class name, so a name-prefixed file such as `Name_CDoublyLinkedList.java` appears as `CDoublyLinkedList.java`. E-mail addresses and `@author` / `Name:` / `Student ID:` comment values are redacted. This is best-effort: free-form names in comments are not detected.
 2. **Excludes instructor material** (`--starter-mode strip`, the default). Excluded files (supplied testers) are dropped. Lines matching the starter code are removed: matched on their code tokens (so spacing, trailing comments and brace placement don't matter), multiset-matched, and only lines containing letters or digits. Each kept line retains its original line number. `--starter-mode keep` gives the without-exclusion comparison.
 3. **Runs the token baseline** (non-LLM) on every pair and every reference. Tokens are normalized (identifiers become `ID`, literals become `STR`/`NUM`, comments and imports are dropped), then 5-gram **Jaccard** (primary) and **containment** (more sensitive to partial copying) are computed, both on a 0–100 scale.
-4. **Runs the LLM judge** (`--adapter openai|mock`) on every peer pair `S_ij` and on every submission against each AI reference `S_i_AI`. The model returns JSON with an overall `similarity` plus `structure`/`syntax`/`tokens`/`logic` sub-scores, cited evidence regions (`File.java:start-end`), and a rationale. Prompts that are too large are skipped with status `TOO_LARGE`, never truncated.
+4. **Runs the LLM judge** (`--adapter anthropic|openai|mock`) on every peer pair `S_ij` and on every submission against each AI reference `S_i_AI`. The model returns JSON with an overall `similarity` plus `structure`/`syntax`/`tokens`/`logic` sub-scores, cited evidence regions (`File.java:start-end`), and a rationale. Prompts that are too large are skipped with status `TOO_LARGE`, never truncated.
 5. **Computes student scores** per method: `S_i = α·max_j S_ij + (1−α)·S_i_AI`, where `max_j` runs over all partners (both cohorts), `S_i_AI` is the maximum over the reference bank and α defaults to 0.5. The within-cohort and cross-cohort peer maxima are also reported. The peer and AI components are also reported separately, because thresholds are chosen for each one independently. The combined score is blank when no reference is supplied.
 
 Similarity scores are **screening evidence for instructor review**, not findings of cheating.
@@ -80,9 +136,8 @@ Similarity to an AI reference only detects copying from *that known reference*.
 # One cohort only
 ./mvnw -q compile exec:java -Dexec.args="--homework Hw1 --cohort F25"
 
-# OpenAI: smoke test on 5 pairs first, then the full run with --resume
-export OPENAI_API_KEY=...
-... --homework Hw1 --adapter openai --model <exact-model-id> --max-llm-pairs 5 \
+# Claude: smoke test on 5 pairs first, then the full run with --resume (key: see Model access below)
+... --homework Hw1 --adapter anthropic --model claude-opus-5-5 --max-llm-pairs 5 \
     --reference refs/Hw1/gpt --price-in <usd/Mtok> --price-out <usd/Mtok> \
     --pricing-source "<pricing page URL, date>"
 ```
@@ -124,7 +179,7 @@ Copies are made within a cohort (source and partial-copy host come from the same
 | `REFORMAT` | new indent, brace style and operator spacing; the code-token sequence is verified unchanged |
 | `COMMENT_EDIT` | deletes, rewords and adds comments; code is untouched |
 | `REORDER` | shuffles the order of methods, constructors and nested types; fields stay in place |
-| `CONTROL_FLOW` | LLM rewrite (loops, inverted ifs, guard clauses, switch); retried with compiler errors fed back. Skipped without `--adapter openai` |
+| `CONTROL_FLOW` | LLM rewrite (loops, inverted ifs, guard clauses, switch); retried with compiler errors fed back. Skipped without `--adapter anthropic` (or `openai`) |
 | `STACKED` | rename + reorder + comment edits + reformat |
 | `PARTIAL` | replaces some of another student's (the host's) methods with the source's versions; target 25/50/75%, rotating across sources |
 
@@ -191,7 +246,7 @@ Two phases, which enforce the spec's "freeze thresholds before held-out evaluati
 
 ```bash
 ./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--dry-run --price-in <usd/Mtok> --price-out <usd/Mtok>"
-./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--homework Hw1 --adapter openai --model <exact-id>"
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--homework Hw1 --adapter anthropic --model claude-opus-5-5"
 ./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--verify negative-controls/Hw1/Hw1-N01 --homework Hw1"
 ```
 
@@ -217,5 +272,5 @@ A failed attempt is retried with the compiler errors or the first output differe
 
 ### Not built yet (PDM)
 
-- Running anything that needs the API key: OpenAI smoke test, AI references, control-flow copies, LLM PDM runs, 3× stability repeats
+- Running anything that needs the API key: Claude smoke test, AI references, control-flow copies, LLM PDM runs, 3× stability repeats
 - Detection charts and tables in the Word report (the CSVs above are their data)

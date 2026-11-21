@@ -21,7 +21,7 @@ public final class RefMain {
             AI reference solutions (generate with an LLM, verify automatically)
 
             Usage:
-              RefMain --homework <Hw> [--homework <Hw>...] --adapter openai --model <id> [options]
+              RefMain --homework <Hw> [--homework <Hw>...] --adapter anthropic --model <id> [options]
               RefMain --verify <solution dir> --homework <Hw>           check an existing solution (no LLM)
               RefMain --homework <Hw>... --dry-run [--price-in X --price-out Y]   estimate tokens/cost
 
@@ -30,7 +30,8 @@ public final class RefMain {
               --out-root <dir>           default references (gitignored: solutions to confidential assignments)
               --max-attempts <n>         default 3; compile errors / output differences are fed back
               --max-output-tokens <n>    default 16000
-              --temperature <t>          omitted unless given
+              --temperature <t>          omitted unless given (rejected by current Claude models)
+              --effort <level>           Claude only: low|medium|high|xhigh|max (default: the model's own default)
               --max-retries <n>          HTTP retries per call, default 4
               --timeout <seconds>        per program run during verification, default 120
               --force                    replace an existing reference for the same homework and model
@@ -39,7 +40,8 @@ public final class RefMain {
             JVM: HW1/HW2 output must equal the description's CORRECT OUTPUT exactly; HW8 must print true/true
             and pass an independent check of both sorts. Results go to <out-root>/<Hw>/<model>/ (verified) or
             <model>.unverified/, with provenance.json. human_reviewed stays false until a person checks the code.
-            Environment (openai): OPENAI_API_KEY (required), OPENAI_BASE_URL (optional)
+            Environment: ANTHROPIC_API_KEY for --adapter anthropic; OPENAI_API_KEY (+ optional OPENAI_BASE_URL)
+            for --adapter openai. Keys are read from the environment only, never from files in the repo.
             """;
 
     private RefMain() {
@@ -61,6 +63,7 @@ public final class RefMain {
         Path verifyDir = null;
         String adapterName = "none";
         String model = null;
+        String effort = null;
         Double temperature = null;
         int maxOutputTokens = 16_000;
         int maxAttempts = 3;
@@ -83,6 +86,7 @@ public final class RefMain {
                 case "--verify" -> verifyDir = Path.of(value(args, ++i, a));
                 case "--adapter" -> adapterName = value(args, ++i, a).toLowerCase(Locale.ROOT);
                 case "--model" -> model = value(args, ++i, a);
+                case "--effort" -> effort = value(args, ++i, a);
                 case "--temperature" -> temperature = Double.parseDouble(value(args, ++i, a));
                 case "--max-output-tokens" -> maxOutputTokens = Integer.parseInt(value(args, ++i, a));
                 case "--max-attempts" -> maxAttempts = Integer.parseInt(value(args, ++i, a));
@@ -127,8 +131,9 @@ public final class RefMain {
         }
 
         ModelAdapter adapter = switch (adapterName) {
+            case "anthropic" -> aiaa.llm.AnthropicAdapter.fromEnvironment(model, effort, maxRetries);
             case "openai" -> OpenAiAdapter.fromEnvironment(model, maxRetries);
-            case "none" -> throw new IllegalArgumentException("--adapter openai is required to generate references");
+            case "none" -> throw new IllegalArgumentException("--adapter anthropic (or openai) is required to generate references");
             default -> throw new IllegalArgumentException("Unknown adapter " + adapterName);
         };
         ReferenceGenerator gen = new ReferenceGenerator(adapter, maxOutputTokens, temperature, maxAttempts,

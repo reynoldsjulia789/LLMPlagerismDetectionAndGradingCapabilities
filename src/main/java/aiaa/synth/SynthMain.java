@@ -50,8 +50,9 @@ public final class SynthMain {
               --private-dir <dir>        where anonymous-ID mappings go, default private (gitignored)
               --id-map <file>            exact mapping file (single cohort only), default
                                          <private-dir>/synth_id_map_<cohort>.csv
-              --adapter none|openai      LLM for CONTROL_FLOW variants, default none (those are skipped)
-              --model <id>               exact model ID (required for openai)
+              --adapter <name>           LLM for CONTROL_FLOW variants: none (default; skipped) | anthropic | openai
+              --model <id>               exact model ID (required for anthropic/openai)
+              --effort <level>           Claude only: low|medium|high|xhigh|max (default: the model's own default)
               --temperature <t>          omitted unless given
               --max-output-tokens <n>    default 16000
               --max-llm-attempts <n>     default 3 (compile errors are fed back between attempts)
@@ -61,7 +62,8 @@ public final class SynthMain {
               --price-in <usd>           USD per 1M input tokens (dry-run cost estimate)
               --price-out <usd>          USD per 1M output tokens
 
-            Environment (openai): OPENAI_API_KEY (required), OPENAI_BASE_URL (optional)
+            Environment: ANTHROPIC_API_KEY for --adapter anthropic; OPENAI_API_KEY (+ optional OPENAI_BASE_URL)
+            for --adapter openai. Keys are read from the environment only, never from files in the repo.
             """;
 
     private SynthMain() {
@@ -94,6 +96,7 @@ public final class SynthMain {
         Path privateDir = Path.of("private");
         String adapterName = "none";
         String model = null;
+        String effort = null;
         Double temperature = null;
         int maxOutputTokens = 16_000;
         int maxAttempts = 3;
@@ -124,6 +127,7 @@ public final class SynthMain {
                 case "--private-dir" -> privateDir = Path.of(value(args, ++i, a));
                 case "--adapter" -> adapterName = value(args, ++i, a).toLowerCase(Locale.ROOT);
                 case "--model" -> model = value(args, ++i, a);
+                case "--effort" -> effort = value(args, ++i, a);
                 case "--temperature" -> temperature = Double.parseDouble(value(args, ++i, a));
                 case "--max-output-tokens" -> maxOutputTokens = Integer.parseInt(value(args, ++i, a));
                 case "--max-llm-attempts" -> maxAttempts = Integer.parseInt(value(args, ++i, a));
@@ -182,6 +186,7 @@ public final class SynthMain {
 
         ModelAdapter adapter = switch (adapterName) {
             case "none" -> null;
+            case "anthropic" -> aiaa.llm.AnthropicAdapter.fromEnvironment(model, effort, maxRetries);
             case "openai" -> OpenAiAdapter.fromEnvironment(model, maxRetries);
             default -> throw new IllegalArgumentException("Unknown adapter " + adapterName);
         };
