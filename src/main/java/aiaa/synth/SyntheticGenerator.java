@@ -31,16 +31,18 @@ import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
- * Builds a labeled synthetic-copy dataset for one assignment:
+ * Builds a labeled synthetic-copy dataset for one cohort of one homework. The output folder is
+ * itself a cohort folder in the shared layout ({@code <root>/HomeworkSubmissions/<Hw>/<cohort>/}),
+ * so the generated root can be screened like the real data:
  * <ul>
  *   <li>copies the originals (identity-scrubbed, anonymous IDs, display file names) to
- *       {@code submissions/<assignment>-Sxx/}</li>
+ *       {@code <assignment>-Sxx/}</li>
  *   <li>derives variants from {@code sourceCount} randomly chosen compiling submissions (and from
  *       each AI reference): exact, renamed, reformatted, comment-edited, reordered, equivalent control
  *       flow (LLM), stacked, and partial (method splice at 25/50/75%)</li>
  *   <li>keeps a variant only if it compiles; records provenance in {@code manifest.csv}</li>
  * </ul>
- * The output folder can be passed to the PDM with {@code --ids-from-folders}.
+ * Screen the result with {@code PdmMain --data-root synthetic-data --homework <Hw>}.
  */
 public final class SyntheticGenerator {
 
@@ -50,7 +52,6 @@ public final class SyntheticGenerator {
 
     static final String MANIFEST_CSV = "manifest.csv";
     static final String LOG_JSON = "generation_log.json";
-    static final String SUBMISSIONS_DIR = "submissions";
     static final String GENERATOR_VERSION = "synth-v1";
     private static final double[] PARTIAL_LEVELS = {0.25, 0.50, 0.75};
     private static final int MAX_PARTIAL_HOSTS = 8;
@@ -59,6 +60,8 @@ public final class SyntheticGenerator {
     private final ModelAdapter adapter;
     private final Set<String> excluded;
     private StarterCodeFilter filter;
+    private final Set<String> sourceIds = new java.util.HashSet<>();
+    private final Set<String> usedHosts = new java.util.HashSet<>();
 
     /** @param adapter LLM used for CONTROL_FLOW variants, or null to skip them */
     public SyntheticGenerator(SynthConfig config, ModelAdapter adapter) {
@@ -89,34 +92,14 @@ public final class SyntheticGenerator {
         prepareOutDir();
         filter = buildFilter();
 
-        List<Program> originals = new ArrayList<>();
         Map<String, String> idMap = new LinkedHashMap<>();
-        List<Path> folders = SourceFiles.submissionFolders(config.submissionsDir());
-        for (int i = 0; i < folders.size(); i++) {
-            String id = String.format("%s-S%02d", config.assignment(), i + 1);
-            idMap.put(id, folders.get(i).getFileName().toString());
-            Map<String, String> files = load(folders.get(i));
-            if (files.isEmpty()) {
-                continue;
-            }
-            CompileCheck.Result c = CompileCheck.compile(files);
-            originals.add(new Program(id, "student", files, c.ok(), c.diagnostics()));
-            write(id, files);
-        }
-        List<Program> references = new ArrayList<>();
-        for (Path ref : config.referencePaths()) {
-            String id = "REF-" + ref.getFileName().toString().replaceAll("\\.(zip|java)$", "");
-            Map<String, String> files = load(ref);
-            CompileCheck.Result c = CompileCheck.compile(files);
-            references.add(new Program(id, "ai_reference", files, c.ok(), c.diagnostics()));
-        }
-
+        List<Program> originals = loadOriginals(idMap, true);
+        List<Program> references = loadReferences();
         List<Program> compiling = originals.stream().filter(Program::compiles).toList();
-        Random master = new Random(config.seed());
-        List<Program> shuffled = new ArrayList<>(compiling);
-        Collections.shuffle(shuffled, master);
-        List<Program> sources = new ArrayList<>(shuffled.subList(0, Math.min(config.sourceCount(), shuffled.size())));
-        references.stream().filter(Program::compiles).forEach(sources::add);
+        List<Program> sources = chooseSources(compiling, references);
+        sourceIds.clear();
+        usedHosts.clear();
+        sources.forEach(p -> sourceIds.add(p.id()));
 
         ControlFlowRewriter rewriter = adapter == null ? null
                 : new ControlFlowRewriter(adapter, config.maxOutputTokens(), config.temperature(), config.maxLlmAttempts());
@@ -151,6 +134,68 @@ public final class SyntheticGenerator {
         writeIdMap(idMap);
         writeLog(started, originals, references, sources, variants, rewriter);
         return new Summary(config.outDir(), originals.size(), compiling.size(), variants);
+    }
+
+    private List<Program> loadOriginals(Map<String, String> idMap, boolean writeOut) {
+        List<Program> originals = new ArrayList<>();
+        List<Path> folders = SourceFiles.submissionFolders(config.submissionsDir());
+        for (int i = 0; i < folders.size(); i++) {
+            String id = String.format("%s-S%02d", config.assignment(), i + 1);
+            idMap.put(id, folders.get(i).getFileName().toString());
+            Map<String, String> files = load(folders.get(i));
+            if (files.isEmpty()) {
+                continue;
+            }
+            CompileCheck.Result c = CompileCheck.compile(files);
+            originals.add(new Program(id, "student", files, c.ok(), c.diagnostics()));
+            if (writeOut) {
+                write(id, files);
+            }
+        }
+        return originals;
+    }
+
+    private List<Program> loadReferences() {
+        List<Program> references = new ArrayList<>();
+        for (Path ref : config.referencePaths()) {
+            String id = "REF-" + ref.getFileName().toString().replaceAll("\\.(zip|java)$", "");
+            Map<String, String> files = load(ref);
+            CompileCheck.Result c = CompileCheck.compile(files);
+            references.add(new Program(id, "ai_reference", files, c.ok(), c.diagnostics()));
+        }
+        return references;
+    }
+
+    /** The seeded choice of source submissions, plus every compiling reference. */
+    private List<Program> chooseSources(List<Program> compiling, List<Program> references) {
+        Random master = new Random(config.seed());
+        List<Program> shuffled = new ArrayList<>(compiling);
+        Collections.shuffle(shuffled, master);
+        List<Program> sources = new ArrayList<>(shuffled.subList(0, Math.min(config.sourceCount(), shuffled.size())));
+        references.stream().filter(Program::compiles).forEach(sources::add);
+        return sources;
+    }
+
+    /** Dry-run estimate for the CONTROL_FLOW variants (token counts are estimates). */
+    public record ControlFlowEstimate(int sources, int calls, int maxCallsWithRetries, long inputTokens,
+                                      long outputTokens) {
+    }
+
+    /** Builds the CONTROL_FLOW prompts this configuration would send, without calling any model or writing data. */
+    public ControlFlowEstimate estimateControlFlow() {
+        List<Program> compiling = loadOriginals(new LinkedHashMap<>(), false).stream().filter(Program::compiles).toList();
+        List<Program> sources = chooseSources(compiling, loadReferences());
+        long in = 0;
+        long out = 0;
+        for (Program p : sources) {
+            Map<String, String> targets = new LinkedHashMap<>();
+            Map<String, String> fixed = new LinkedHashMap<>();
+            p.files().forEach((k, v) -> (excluded.contains(k) ? fixed : targets).put(k, v));
+            long[] e = ControlFlowRewriter.estimate(targets, fixed);
+            in += e[0];
+            out += e[1];
+        }
+        return new ControlFlowEstimate(sources.size(), sources.size(), sources.size() * config.maxLlmAttempts(), in, out);
     }
 
     // ------------------------------------------------------------------ transformations
@@ -260,14 +305,26 @@ public final class SyntheticGenerator {
                 o.inputTokens(), o.outputTokens(), null);
     }
 
+    /**
+     * Hosts are taken from submissions that are neither a source nor already a host. Otherwise
+     * source/host links would chain many students into one split family (A's partial copy lives in
+     * B, B's in C, ...). Falls back to any other compiling submission only when none is left.
+     */
     private Draft partial(Program source, List<Program> compiling, double target, Random rnd) {
-        List<Program> hosts = new ArrayList<>(compiling.stream().filter(p -> !p.id().equals(source.id())).toList());
-        Collections.shuffle(hosts, rnd);
+        List<Program> fresh = new ArrayList<>(compiling.stream()
+                .filter(p -> !sourceIds.contains(p.id()) && !usedHosts.contains(p.id())).toList());
+        List<Program> others = new ArrayList<>(compiling.stream()
+                .filter(p -> !p.id().equals(source.id()) && !fresh.contains(p)).toList());
+        Collections.shuffle(fresh, rnd);
+        Collections.shuffle(others, rnd);
+        List<Program> hosts = new ArrayList<>(fresh);
+        hosts.addAll(others);
         for (Program host : hosts.subList(0, Math.min(MAX_PARTIAL_HOSTS, hosts.size()))) {
             Optional<MethodSplicer.Result> r = MethodSplicer.splice(source.files(), host.files(), target, filter,
                     excluded, new Random(rnd.nextLong()), CompileCheck::compiles);
             if (r.isPresent()) {
                 MethodSplicer.Result s = r.get();
+                usedHosts.add(host.id());
                 return new Draft(Status.OK, s.files(), String.format(Locale.ROOT,
                         "%d of host's methods replaced by source's (target %.0f%%, achieved %.1f%%)",
                         s.methods().size(), target * 100, s.fraction() * 100), s.fraction(),
@@ -359,21 +416,27 @@ public final class SyntheticGenerator {
                     throw new IllegalArgumentException("Output folder " + out + " is not empty and was not created by "
                             + "this generator; choose another --out");
                 }
-                Path subs = out.resolve(SUBMISSIONS_DIR);
-                if (Files.isDirectory(subs)) {
-                    try (Stream<Path> walk = Files.walk(subs)) {
-                        walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                // Regenerating: remove only the submission folders this generator wrote (<assignment>-Sxx / -Vxx).
+                String prefix = config.assignment() + "-";
+                try (Stream<Path> s = Files.list(out)) {
+                    for (Path dir : s.filter(Files::isDirectory).toList()) {
+                        String name = dir.getFileName().toString();
+                        if (name.startsWith(prefix) && name.substring(prefix.length()).matches("[SV]\\d+")) {
+                            try (Stream<Path> walk = Files.walk(dir)) {
+                                walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                            }
+                        }
                     }
                 }
             }
-            Files.createDirectories(out.resolve(SUBMISSIONS_DIR));
+            Files.createDirectories(out);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     private void write(String id, Map<String, String> files) {
-        Path dir = config.outDir().resolve(SUBMISSIONS_DIR).resolve(id);
+        Path dir = config.outDir().resolve(id);
         try {
             Files.createDirectories(dir);
             for (Map.Entry<String, String> e : files.entrySet()) {
@@ -463,6 +526,7 @@ public final class SyntheticGenerator {
         if (rewriter != null) {
             m.put("llm_provider", adapter.provider());
             m.put("llm_model_id", adapter.modelId());
+            m.put("llm_effort", (adapter instanceof aiaa.llm.AnthropicAdapter aa ? (aa.effort() == null ? "model default" : aa.effort()) : "n/a"));
             m.put("llm_prompt_version", rewriter.promptVersion());
             m.put("llm_temperature", config.temperature() == null ? "provider default (not sent)" : config.temperature());
             m.put("llm_max_output_tokens", config.maxOutputTokens());

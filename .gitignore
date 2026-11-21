@@ -14,12 +14,19 @@ lib/*.jar
 # Submission folders wherever they end up (the ** matches any depth)
 **/HomeworkSubmissions/
 **/HomeworksSubmissions/
+# ...except the committed demo dataset, which is synthetic toy code (no student data)
+!/demo/HomeworkSubmissions/
+# AI reference solutions to the (confidential) assignments
+references/
 
 ### AIAA outputs / private data ###
 # PDM results (contain anonymized scores and model responses)
 pdm-output/
 # Synthetic copy datasets (derived from student code - confidential)
 synthetic-data/
+# Threshold evaluation outputs, and the demo's regenerated outputs
+eval-output/
+demo-output/
 # Anonymous-ID -> student folder mappings
 private/
 # Office lock files (e.g. ~$document.docx)

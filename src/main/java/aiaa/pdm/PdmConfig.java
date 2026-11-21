@@ -1,5 +1,7 @@
 package aiaa.pdm;
 
+import aiaa.data.DataLayout;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -7,8 +9,10 @@ import java.util.Set;
 /**
  * Everything that determines one PDM run. All of it is written to run_manifest.json.
  *
- * @param assignment          label such as F25Hw1; only submissions of one assignment are ever compared
- * @param submissionsDir      folder whose subfolders are individual submissions
+ * @param assignment          run label: a homework (Hw1) or one cohort (F25Hw1). Only submissions of the same
+ *                            homework are ever compared; with several cohorts, pairs across cohorts are included
+ *                            and tagged CROSS
+ * @param cohorts             cohorts to compare (label + folder whose subfolders are individual submissions)
  * @param starterPaths        instructor starter code (directories, zips or files)
  * @param excludedFiles       file names (after display renaming) dropped in STRIP mode, e.g. supplied testers
  * @param referencePaths      AI-generated reference solutions (each a directory, zip or file); may be empty
@@ -27,11 +31,12 @@ import java.util.Set;
  * @param priceOutputPerMTok  USD per 1M output tokens, or null if unknown
  * @param pricingSource       where the prices came from (URL + date), recorded in the manifest
  * @param resume              reuse successful responses already saved in outDir
- * @param idsFromFolders      use folder names as submission IDs (for already-anonymized datasets, e.g. synthetic-data)
+ * @param idsFromFolders      always use folder names as submission IDs. Folders already named
+ *                            {@code <cohort>-<ID>} (e.g. generated datasets) are used as IDs regardless
  */
 public record PdmConfig(
         String assignment,
-        Path submissionsDir,
+        List<DataLayout.Cohort> cohorts,
         List<Path> starterPaths,
         Set<String> excludedFiles,
         List<Path> referencePaths,
@@ -53,6 +58,9 @@ public record PdmConfig(
         boolean idsFromFolders) {
 
     public PdmConfig {
+        if (cohorts == null || cohorts.isEmpty()) {
+            throw new IllegalArgumentException("at least one cohort is required");
+        }
         if (alpha < 0 || alpha > 1) {
             throw new IllegalArgumentException("alpha must be in [0,1]");
         }

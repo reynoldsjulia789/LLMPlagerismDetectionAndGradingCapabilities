@@ -27,7 +27,7 @@ class SyntheticGeneratorTest {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** A second, independently written implementation with the same API (used as splice host). */
-    private static final String OTHER = """
+    static final String OTHER = """
             import java.util.*;
             import java.util.function.Function;
 
@@ -144,7 +144,7 @@ class SyntheticGeneratorTest {
         assertEquals(16, s.ok(), s.variants().stream().filter(v -> v.status() != SyntheticGenerator.Status.OK)
                 .map(v -> v.transformation() + ": " + v.note()).toList().toString());
         for (SyntheticGenerator.Variant v : s.variants()) {
-            Path vdir = out.resolve("submissions").resolve(v.id());
+            Path vdir = out.resolve(v.id());
             assertTrue(Files.isDirectory(vdir), v.id());
             if (v.transformation() == SyntheticGenerator.Transformation.EXACT) {
                 assertEquals(100.0, v.jaccardVsSource(), 1e-9);
@@ -154,15 +154,15 @@ class SyntheticGeneratorTest {
                 assertTrue(v.amountCopied() > 0 && v.amountCopied() < 1);
             }
         }
-        assertTrue(Files.exists(out.resolve("submissions/F25Hw1-S02/MyLinkedList.java")), "display name, no 'Doe_'");
+        assertTrue(Files.exists(out.resolve("F25Hw1-S02/MyLinkedList.java")), "display name, no 'Doe_'");
         String manifest = Files.readString(out.resolve(SyntheticGenerator.MANIFEST_CSV));
         assertFalse(manifest.contains("aaa_1"), "folder names stay in the private map only");
         assertTrue(Files.readString(dir.resolve("private/map.csv")).contains("F25Hw1-S01,1_aaa_1"));
 
         // Same seed -> same dataset.
-        String first = Files.readString(out.resolve("submissions/F25Hw1-V03/MyLinkedList.java"));
+        String first = Files.readString(out.resolve("F25Hw1-V03/MyLinkedList.java"));
         new SyntheticGenerator(config, mock).run();
-        assertEquals(first, Files.readString(out.resolve("submissions/F25Hw1-V03/MyLinkedList.java")));
+        assertEquals(first, Files.readString(out.resolve("F25Hw1-V03/MyLinkedList.java")));
     }
 
     @Test
