@@ -2,17 +2,17 @@
 
 Java 25 / Maven project. Modules:
 
-| Package | Purpose | Status |
-|---|---|---|
-| `aiaa.llm` | Shared model adapter interface (`ModelAdapter`), `AnthropicAdapter` (Claude, used for this project), `OpenAiAdapter`, `MockAdapter` | done |
-| `aiaa.pdm` | Plagiarism Detection Module (PDM) | core done |
-| `aiaa.synth` | Synthetic copy generator (labeled plagiarism test cases) | done (control flow needs an LLM) |
-| `aiaa.data` | Shared dataset layout, homework defaults, assignment materials | done |
-| `aiaa.labels` | Ground-truth labels and dev/validation/test split | done |
-| `aiaa.eval` | Threshold sweep, frozen selection, held-out detection metrics | done |
-| `aiaa.refs` | AI reference solutions: generation and automatic verification | done (generation needs an LLM) |
-| `aiaa.demo` | One-command demonstration on a toy dataset | done |
-| CAM / OCAA | Code assessment and output-based grading | partner's branch |
+| Package       | Purpose                                                                                                                                                                  | Status                           |
+|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------|
+| `aiaa.llm`    | Shared model adapter interface (`ModelAdapter`), `AnthropicAdapter` (Claude, used for this project), `GoogleAdapter` (Gemini), `GroqAdapter` (OpenAI-OSS), `MockAdapter` | done                             |
+| `aiaa.pdm`    | Plagiarism Detection Module (PDM)                                                                                                                                        | core done                        |
+| `aiaa.synth`  | Synthetic copy generator (labeled plagiarism test cases)                                                                                                                 | done (control flow needs an LLM) |
+| `aiaa.data`   | Shared dataset layout, homework defaults, assignment materials                                                                                                           | done                             |
+| `aiaa.labels` | Ground-truth labels and dev/validation/test split                                                                                                                        | done                             |
+| `aiaa.eval`   | Threshold sweep, frozen selection, held-out detection metrics                                                                                                            | done                             |
+| `aiaa.refs`   | AI reference solutions: generation and automatic verification                                                                                                            | done (generation needs an LLM)   |
+| `aiaa.demo`   | One-command demonstration on a toy dataset                                                                                                                               | done                             |
+| `aiaa.cam`    | Code Assessment Module (CAM)                                                                                                                                             | done                               |
 
 ## Prerequisites
 
@@ -69,6 +69,24 @@ Prices are from https://platform.claude.com/docs/en/about-claude/pricing. Check 
 - **Dry-run caution:** the `--dry-run` estimates assume 400 output tokens per call, which is too low with thinking. After the smoke test, read the average output tokens per call from `run_manifest.json` and pass it as `--assumed-output-tokens`.
 - **Not supported:** current Claude models reject `--temperature`, so the adapter reports it as an unsupported setting instead of sending it. Results are therefore not deterministic, which is why the spec's stability repeats matter.
 - **Refusals** are recorded as failed comparisons. The adapter deliberately does **not** fall back to a different model, so every result belongs to exactly one model.
+
+### Additional Model Access (Google Gemini & Groq)
+
+**Substitution Disclosure:** 
+For the three-family comparison in the Code Assessment Module (CAM), 
+paid OpenAI and AWS Bedrock accounts were unavailable due to budget constraints.
+With group agreement, CAM compares **Anthropic Claude** (`AnthropicAdapter`), 
+**Google Gemini** (`GoogleAdapter` via Google AI Studio Free Tier), and 
+**OpenAI GPT-OSS** (`GroqAdapter` via Groq Cloud Free Tier). 
+Every run records the exact provider, requested model ID, returned model version, token counts, latency, and pricing.
+
+Store API keys as environment variables
+- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY`
+- `GROQ_API_KEY`
+
+In CAM, to change LLM model for Google, Anthropic, or Groq, change the corresponding private static final String at the 
+top of `RunCAM`
 
 ### 3. Smoke test (a few cents)
 
@@ -270,7 +288,59 @@ A failed attempt is retried with the compiler errors or the first output differe
 | Control-flow copies, one cohort | 8 | ≈38k |
 | AI reference, one homework | 1 | ≈3k–6k |
 
-### Not built yet (PDM)
+## Code Assessment Module (`aiaa.cam`)
 
-- Running anything that needs the API key: Claude smoke test, AI references, control-flow copies, LLM PDM runs, 3× stability repeats
-- Detection charts and tables in the Word report (the CSVs above are their data)
+The Code Assessment Module evaluates functional correctness and code quality across `Hw1`, `Hw2`, and `Hw8` in two stages:
+
+1. **Output Comparison Based Assessment (`JUnitRunner`).** Copies each student's `.java` files (excluding student-written `Tester` files) and the corresponding instructor JUnit 5 test suite + reflection adapter (`Hw1ListAdapter`, `Hw2ListAdapter`, `ListAdapter`) into an isolated temporary directory, compiles with `javac`, and executes JUnit 5 with preemptive timeouts (`ThreadMode.SEPARATE_THREAD` + 15s process kill) to prevent infinite loops from hanging the batch. The JUnit pass percentage (`0.00–100.00`) serves as the ground-truth baseline grade (`junit_baseline_grade`).
+2. **LLM Code Assessment (`LlmGrader`).** Sends the complete, untruncated student source code and assignment rubric to each configured `ModelAdapter` using a strict JSON schema (`src/main/resources/prompts/cam_grading_schema.json`). Each required method is scored individually (`0–100`) alongside qualitative feedback and an overall code grade.
+3. **Statistical Evaluation (`CAMStatistics`).** Computes Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), Mean Signed Error, within-±5% and within-±10% accuracy (per assignment and pooled), and aggregates API latency, token counts, retries, and USD cost into chart-ready CSV tables.
+
+### Prerequisites & JUnit Standalone JAR
+
+`JUnitRunner` requires `lib/junit-platform-console-standalone.jar` (JUnit Platform 1.11.4) to compile and execute student submissions in isolated child JVMs. Maven copies this automatically during `process-resources`:
+
+```powershell
+mvn process-resources
+```
+
+### Example Commands
+
+```powershell
+# 1. Offline dry run (default): runs real JUnit 5 tests on all submissions with simulated LLM responses
+./mvnw.cmd -q compile exec:java "-Dexec.mainClass=aiaa.cam.RunCAM"
+
+# 2. Live 1-submission smoke test (verifies API keys, JSON schema parsing, and CSV formatting)
+./mvnw.cmd -q compile exec:java "-Dexec.mainClass=aiaa.cam.RunCAM" "-Dexec.args=--live --limit 1"
+
+# 3. Full live evaluation across all submissions and configured models
+./mvnw.cmd -q compile exec:java "-Dexec.mainClass=aiaa.cam.RunCAM" "-Dexec.args=--live"
+```
+
+### To Run in IntelliJ:
+1. Open the root project folder
+2. Place student submissions in a folder titled HomeworkSubmissions inside src/mainresources, ensure the submissions are organized by homework (Hw1, Hw2, Hw8), then by quarter
+3. Locate the ... menu next to the play and debug buttons at the top of the IDE
+4. Under configuration, click edit
+5. Name the configuration and add args and environment vars in the correct locations, then click run.
+    - arg options: 
+        - `--live` runs with live connections to LLMs - uses tokens
+        - `--limit <int>` limits the number of submissions evaluated to the specified int
+6. Run results will be located in the folder assessment_results
+
+### Outputs (`assessment_results/`, gitignored)
+
+| File                          | Contents |
+|-------------------------------|---|
+| `grade_comparison.csv`        | Per submission: `submission_id`, `assignment`, `cohort`, `junit_baseline_grade`, `<provider>_grade` for each model, signed error `error_<provider>`, `run_id`, and `status` (`SUCCESS` or `COMPILE_OR_TEST_ERROR`) |
+| `method_grades.csv`           | Per submission × model × method: individual method score (`0–100`) and qualitative feedback |
+| `experiment_log.csv`          | Per API call: provider, requested/returned model version, prompt/rubric versions, sampling parameters, input/output tokens, retries, latency (ms), estimated USD cost, and timestamp |
+| `grading_metrics_summary.csv` | MAE, RMSE, Mean Signed Error, and ±5% / ±10% accuracy per assignment (`Hw1`, `Hw2`, `Hw8`) and `POOLED` |
+| `efficiency_summary.csv`      | Mean and standard deviation of wall-clock latency (ms), total tokens, API calls, retries, and USD cost per model |
+| `scatter_plot_chart_data.csv` | Baseline JUnit grade, `equality_line` (`y = x`), and predicted LLM grades formatted for native Word/Excel scatter plots |
+
+### Troubleshooting (CAM)
+
+- **`FileNotFoundException: assessment_results\grade_comparison.csv (The process cannot access the file...)`:** Close any open CSV files from `assessment_results\` in Excel before re-running `RunCAM`.
+- **`COMPILE_OR_TEST_ERROR` on all submissions:** Ensure `lib/junit-platform-console-standalone.jar` exists by running `mvn process-resources`. (Individual `COMPILE_OR_TEST_ERROR` rows indicate genuine syntax/import errors in a student's submission.)
+- **Environment variables not recognized in IDE:** Close and reopen your IDE/terminal after adding `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `GROQ_API_KEY` in Windows Environment Variables.
