@@ -40,7 +40,7 @@ public class RunCAM
 
                 adapters.add(GoogleAdapter.fromEnvironment(_google_model, 2));
                 adapters.add(GroqAdapter.fromEnvironment(_groq_model, 2));
-//                adapters.add(AnthropicAdapter.fromEnvironment("claude-haiku-5-5", null, 1));
+                adapters.add(AnthropicAdapter.fromEnvironment(_anthropic_model, null, 1));
             }
             else
             {
