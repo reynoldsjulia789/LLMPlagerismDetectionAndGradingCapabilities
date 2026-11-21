@@ -1,9 +1,6 @@
 package aiaa.cam;
 
-import aiaa.llm.AnthropicAdapter;
-import aiaa.llm.GeminiAdapter;
-import aiaa.llm.MockAdapterCAM;
-import aiaa.llm.ModelAdapter;
+import aiaa.llm.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +8,9 @@ import java.util.Map;
 
 public class RunCAM
 {
+    private static final String _google_model    = "gemini-3.5-flash-lite";
+    private static final String _groq_model      = "openai/gpt-oss-120b";
+    private static final String _anthropic_model = "claude-haiku-5-5";
 
     public static void main(String[] args)
     {
@@ -38,8 +38,9 @@ public class RunCAM
             {
                 System.out.println("Mode: LIVE (using real LLM APIs)");
 
-                adapters.add(GeminiAdapter.fromEnvironment("gemini-3.1-flash-lite-preview", 3));
-                adapters.add(AnthropicAdapter.fromEnvironment("claude-haiku-5-5", null, 1));
+                adapters.add(GoogleAdapter.fromEnvironment(_google_model, 2));
+                adapters.add(GroqAdapter.fromEnvironment(_groq_model, 2));
+//                adapters.add(AnthropicAdapter.fromEnvironment("claude-haiku-5-5", null, 1));
             }
             else
             {
@@ -51,14 +52,14 @@ public class RunCAM
 
             // Pricing per 1,000 tokens (USD) for cost estimation
             Map<String, Double> inputPricePer1k = Map.of(
-                    "gpt-4o-mini", 0.00015,
-                    "claude-haiku-5-5", 0.001,
-                    "gemini-3.1-flash-lite-preview", 0.0
+                    _groq_model, 0.00015,               // using free tier, but recording cost for paid version
+                    _anthropic_model, 0.001,
+                    _google_model, 0.0003                   // using free tier, but recording cost for paid version
             );
             Map<String, Double> outputPricePer1k = Map.of(
-                    "gpt-4o-mini", 0.00060,
-                    "claude-haiku-5-5", 0.005,
-                    "gemini-3.1-flash-lite-preview", 0.0
+                    _groq_model, 0.00060,               // using free tier, but recording cost for paid version
+                    _anthropic_model, 0.005,
+                    _google_model, 0.0025                   // using free tier, but recording cost for paid version
             );
 
             // Run JUnit tests and LLM grading

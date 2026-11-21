@@ -1,23 +1,23 @@
 submission_id,assignment,provider,model_id,method_name,method_score,feedback,run_id
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"size",100.00,"Correct implementation.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"isEmpty",100.00,"Correct implementation.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"removeFirst",40.00,"Fails to return the removed data; returns null instead.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"contains",100.00,"Correct implementation handling nulls.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"remove(Object)",100.00,"Correct implementation.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"removeAllCopies",20.00,"Logic is flawed; returns false when removals occur and true when none occur, which is the opposite of the requirement.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"interleave",30.00,"Logic is incorrect; it uses addFirst (reversing order) and fails to correctly traverse both lists.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"add(int, Object)",50.00,"Ignores the index parameter and always adds to the front.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"get(int)",20.00,"Always returns null instead of the node data.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"remove(int)",100.00,"Correct implementation.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite,"add(Object)",50.00,"Infinite loop in traversal; the condition 'node != null' never terminates because the list is circular or improperly linked.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"size",100.00,"Returns the maintained counter correctly.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"isEmpty",100.00,"Correctly checks size == 0.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"removeFirst",35.00,"Unlinks the first node and decrements size, but returns null instead of the removed data, which violates the contract.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"contains",100.00,"Traverses from head.next, handles null data and null argument correctly.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"remove(Object)",95.00,"Correct prev/cur traversal, null handling, single removal, and size update.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"removeAllCopies",40.00,"Repeated contains/remove removes all copies, but the return value is inverted: it returns false when elements were removed and true when none were found.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"interleave",5.00,"Uses addFirst, so C is built in reverse order. The loop advances nodeA twice per iteration, can throw a NullPointerException, and stops at the shorter list without appending the remainder.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"add(int,Object)",15.00,"Bounds check is present, but the index is ignored and the node is always inserted at the head. Size is updated.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"get(int)",5.00,"Walks to the node but always returns null. The bounds check uses index > size, which allows an off-by-one error.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"remove(int)",95.00,"Correct bounds check, predecessor traversal, unlinking, size decrement, and returns the removed data.",RUN_fe1bc6f2
-10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,"add(Object)",5.00,"The traversal loop never links the new node to the list, so the element is lost. Size is incremented regardless.",RUN_fe1bc6f2
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"size",100.00,"Correctly returns the size field.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"isEmpty",100.00,"Correctly checks if size is zero.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"removeFirst",40.00,"Fails to return the removed element's data (returns null) and does not fetch/return the actual data of the removed node.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"contains",100.00,"Properly iterates and handles null values safely.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"remove(Object)",100.00,"Correctly removes the first occurrence and handles null data.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"removeAllCopies",30.00,"Incorrect logic; the loop and return statements do not properly count or clear occurrences and return the wrong boolean values.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"interleave",30.00,"Logic does not alternate properly, modifies node traversal incorrectly, and inserts using addFirst resulting in reverse order.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"add(int, Object)",40.00,"Does not insert at the specified index; it always prepends at the head instead of navigating to the index.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"get(int)",20.00,"Bounds check is incorrect (allows index > size), and the method always returns null instead of the retrieved element.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"remove(int)",90.00,"Works correctly for valid indices, though bounds check allows index == size which should throw IndexOutOfBoundsException.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,google,gemini-3.5-flash-lite,"add(Object)",20.00,"The loop condition `node != null` on head (which has null data) causes an infinite loop or fails to append properly to the end.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"size",100.00,"Correctly returns the size field.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"isEmpty",100.00,"Accurately checks size == 0.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"removeFirst",40.00,"Removes the first node but always returns null instead of the removed element; return value is incorrect.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"contains",100.00,"Properly traverses list and handles null elements.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"remove(Object)",100.00,"Correctly removes first matching element and updates size.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"removeAllCopies",30.00,"Logic inverted: returns false when elements are removed and true when none are removed; does not meet specification.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"interleave",20.00,"Uses addFirst (reverses order), skips nodes, and never appends remaining elements; does not preserve original lists.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"add(int, Object)",20.00,"Ignores the index and always inserts at the front; size update is correct but placement is wrong.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"get(int)",20.00,"Bounds check allows index == size and always returns null instead of the node data.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"remove(int)",100.00,"Correctly removes node at given index and returns its data.",RUN_ad4c82a0
+10_4345577_139666904_10,Hw1,groq,openai/gpt-oss-120b,"add(Object)",20.00,"Traverses to null without linking the new node; size increments but list remains unchanged.",RUN_ad4c82a0

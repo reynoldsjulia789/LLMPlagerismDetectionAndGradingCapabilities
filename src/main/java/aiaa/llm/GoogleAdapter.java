@@ -24,7 +24,7 @@ import java.util.Optional;
  * The model ID is always passed explicitly (e.g. {@code gemini-2.5-flash} or {@code gemma-3-27b-it})
  * so it gets recorded with every result.
  */
-public final class GeminiAdapter implements ModelAdapter
+public final class GoogleAdapter implements ModelAdapter
 {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -35,7 +35,7 @@ public final class GeminiAdapter implements ModelAdapter
     private final int maxRetries;
     private final HttpClient http;
 
-    public GeminiAdapter(String modelId, String apiKey, String baseUrl, int maxRetries)
+    public GoogleAdapter(String modelId, String apiKey, String baseUrl, int maxRetries)
     {
         if (modelId == null || modelId.isBlank()) {
             throw new IllegalArgumentException("An explicit Gemini/Gemma model ID is required (e.g. gemini-3.1-flash-lite-preview)");
@@ -55,9 +55,9 @@ public final class GeminiAdapter implements ModelAdapter
     }
 
     /** Builds an adapter from {@code GEMINI_API_KEY} (and optional {@code GEMINI_BASE_URL}). */
-    public static GeminiAdapter fromEnvironment(String modelId, int maxRetries)
+    public static GoogleAdapter fromEnvironment(String modelId, int maxRetries)
     {
-        return new GeminiAdapter(
+        return new GoogleAdapter(
                 modelId,
                 System.getenv("GEMINI_API_KEY"),
                 System.getenv("GEMINI_BASE_URL"),
@@ -257,7 +257,7 @@ public final class GeminiAdapter implements ModelAdapter
 
     private static void sleepBeforeRetry(int attempt, Optional<String> retryAfter) throws ModelException
     {
-        long millis = retryAfter.flatMap(GeminiAdapter::parseSeconds)
+        long millis = retryAfter.flatMap(GoogleAdapter::parseSeconds)
                 .map(s -> s * 1000)
                 .orElse((long) (1000 * Math.pow(2, attempt)));
         try

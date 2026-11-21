@@ -1,3 +1,3 @@
 model_id,submission_count,total_api_calls,total_retries,total_input_tokens,total_output_tokens,mean_latency_ms,std_dev_latency_ms,total_cost_usd,mean_cost_per_submission_usd
-google:gemini-3.1-flash-lite-preview,1,1,0,4957,620,2752.00,0.00,0.0000,0.000000
-anthropic:claude-haiku-5-5,1,1,0,6722,1559,9460.00,0.00,0.0145,0.014517
+google:gemini-3.5-flash-lite,1,1,0,4957,681,2967.00,0.00,0.0032,0.003190
+groq:openai/gpt-oss-120b,1,1,0,4485,1299,3250.00,0.00,0.0015,0.001452
