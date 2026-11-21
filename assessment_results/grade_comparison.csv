@@ -1,0 +1,2 @@
+submission_id,assignment,cohort,junit_baseline_grade,grade_scope,google_grade,anthropic_grade,error_google,error_anthropic,run_id,status
+10_4345577_139666904_10,Hw1,F25Hw1,40.00,CODE_NORMALIZED_100,55.00,42.00,15.00,2.00,RUN_fe1bc6f2,SUCCESS

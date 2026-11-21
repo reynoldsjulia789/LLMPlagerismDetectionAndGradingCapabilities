@@ -58,11 +58,13 @@ public class LLMGrader
     {
         String userPrompt = promptLoader.buildUserPrompt(assignment, studentCode);
 
+        Double effectiveTemp = "anthropic".equalsIgnoreCase(adapter.provider()) ? null : temperature;
+
         ModelRequest request = new ModelRequest(
                 promptLoader.getSystemPrompt(),
                 userPrompt,
                 maxOutputTokens,
-                temperature,
+                effectiveTemp,
                 "cam_grading_schema",
                 promptLoader.getGradingJsonSchema()
         );
@@ -103,6 +105,8 @@ public class LLMGrader
         }
         catch (ModelException | IOException caught)
         {
+            System.err.println("LLM Error (" + adapter.modelId() + "): " + caught.getMessage());
+
             int retries = (caught instanceof ModelException me) ? me.retries() : 0;
 
             return new GradingOutcome(

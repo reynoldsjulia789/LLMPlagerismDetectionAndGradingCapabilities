@@ -1,5 +1,7 @@
 package aiaa.cam;
 
+import aiaa.llm.AnthropicAdapter;
+import aiaa.llm.GeminiAdapter;
 import aiaa.llm.MockAdapterCAM;
 import aiaa.llm.ModelAdapter;
 
@@ -12,52 +14,56 @@ public class RunCAM
 
     public static void main(String[] args)
     {
-        boolean useLiveModels = true;
+        boolean useLiveModels = false;
+        int     limit         = -1;
 
-        for (String arg : args)
+        for (int idx = 0; idx < args.length; idx++)
         {
-            if ("--mock".equalsIgnoreCase(arg))
+            if ("--live".equalsIgnoreCase(args[idx]))
             {
-                useLiveModels = false;
-                break;
+                useLiveModels = true;
+                continue;
+            }
+            if ("--limit".equalsIgnoreCase(args[idx]) && idx + 1 < args.length)
+            {
+                limit = Integer.parseInt(args[++idx]);
             }
         }
 
         try
         {
-            List<ModelAdapter> llms = new ArrayList<>();
+            List<ModelAdapter> adapters = new ArrayList<>();
 
             if (useLiveModels)
             {
                 System.out.println("Mode: LIVE (using real LLM APIs)");
-//                llms.add(OpenAiAdapter.fromEnvironment("gpt-4o-mini", 3));
 
-                // fix once LLM adapters are added
+                adapters.add(GeminiAdapter.fromEnvironment("gemini-3.1-flash-lite-preview", 3));
+                adapters.add(AnthropicAdapter.fromEnvironment("claude-haiku-5-5", null, 1));
             }
             else
             {
                 System.out.println("Mode: MOCK (dry-run using simulated LLM responses; JUnit tests still run live)");
-                llms.add(new MockAdapterCAM("openai", "gpt-4o-mini", 101L));
-                llms.add(new MockAdapterCAM("google", "gemma-2-27b", 202L));
-                llms.add(new MockAdapterCAM("anthropic", "claude-3-5-sonnet", 303L));
+                adapters.add(new MockAdapterCAM("openai", "gpt-4o-mini", 101L));
+                adapters.add(new MockAdapterCAM("google", "gemma-2-27b", 202L));
+                adapters.add(new MockAdapterCAM("anthropic", "claude-3-5-sonnet", 303L));
             }
 
             // Pricing per 1,000 tokens (USD) for cost estimation
             Map<String, Double> inputPricePer1k = Map.of(
                     "gpt-4o-mini", 0.00015,
-                    "gpt-4o", 0.00250,
-                    "gemma-2-27b", 0.00010,
-                    "claude-3-5-sonnet", 0.00300
+                    "claude-haiku-5-5", 0.001,
+                    "gemini-3.1-flash-lite-preview", 0.0
             );
             Map<String, Double> outputPricePer1k = Map.of(
                     "gpt-4o-mini", 0.00060,
-                    "gpt-4o", 0.01000,
-                    "gemma-2-27b", 0.00020,
-                    "claude-3-5-sonnet", 0.01500
+                    "claude-haiku-5-5", 0.005,
+                    "gemini-3.1-flash-lite-preview", 0.0
             );
 
             // Run JUnit tests and LLM grading
-            CodeAssessmentModule cam = new CodeAssessmentModule(llms, inputPricePer1k, outputPricePer1k);
+            CodeAssessmentModule cam = new CodeAssessmentModule(adapters, inputPricePer1k, outputPricePer1k);
+            cam.setMaxSubmissions(limit);
             cam.runFullAssessment();
 
             // Generate CSVs

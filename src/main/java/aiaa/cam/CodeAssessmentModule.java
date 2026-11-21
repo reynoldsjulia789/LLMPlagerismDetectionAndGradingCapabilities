@@ -38,6 +38,8 @@ public class CodeAssessmentModule
     private final CAMPromptLoader    promptLoader;
     private final LLMGrader          llmGrader;
 
+    private int maxSubmissions = -1;
+
     public CodeAssessmentModule(
             List<ModelAdapter> modelAdapters,
             Map<String, Double> inputPricePer1k,
@@ -48,6 +50,14 @@ public class CodeAssessmentModule
         this.promptLoader  = new CAMPromptLoader(PROMPTS_ROOT);
         this.llmGrader     = new LLMGrader(
                 promptLoader, inputPricePer1k, outputPricePer1k, MAX_OUTPUT_TOKENS, TEMPERATURE);
+    }
+
+    public void setMaxSubmissions(int maxSubmissions)
+    {
+        if (maxSubmissions >= -1)
+        {
+            this.maxSubmissions = maxSubmissions;
+        }
     }
 
     public void runFullAssessment() throws IOException
@@ -85,8 +95,12 @@ public class CodeAssessmentModule
                     + "prompt_version,parameters,rubric_version,input_tokens,output_tokens,"
                     + "api_calls,retries,latency_ms,cost_usd,seed,timestamp,run_id");
 
+            int processedCount = 0;
+
             for (String assignment : List.of("Hw1", "Hw2", "Hw8"))
             {
+                if (maxSubmissions > 0 && processedCount >= maxSubmissions) break;
+
                 Path assignmentDir = SUBMISSIONS_ROOT.resolve(assignment);
 
                 if (!Files.exists(assignmentDir)) continue;
@@ -95,14 +109,23 @@ public class CodeAssessmentModule
                 {
                     for (Path quarterDir : quarterDirs.filter(Files::isDirectory).sorted().toList())
                     {
+                        if (maxSubmissions > 0 && processedCount >= maxSubmissions) break;
+
                         String cohort = quarterDir.getFileName().toString();
 
                         try (Stream<Path> studentDirs = Files.list(quarterDir))
                         {
                             for (Path studentDir : studentDirs.filter(Files::isDirectory).sorted().toList())
                             {
+                                if (maxSubmissions > 0 && processedCount >= maxSubmissions)
+                                {
+                                    break;
+                                }
+
                                 System.out.println("Assessing " + studentDir);
                                 assessStudent(assignment, cohort, studentDir, runId, gradeWriter, methodWriter, logWriter);
+
+                                processedCount++;
                             }
                         }
                     }
@@ -138,7 +161,6 @@ public class CodeAssessmentModule
 
         // Read student source files
         String studentCode = promptLoader.readStudentSourceCode(studentDir);
-        String paramsText = "temperature=" + TEMPERATURE + ";max_output_tokens=" + MAX_OUTPUT_TOKENS;
 
         // Evaluate with each LLM provider
         System.out.println("LLM evaluation");
@@ -147,6 +169,9 @@ public class CodeAssessmentModule
         for (ModelAdapter adapter : modelAdapters)
         {
             String provider = adapter.provider().toLowerCase();
+
+            System.out.println("Model - " + provider + ":" + adapter.modelId());
+
             LLMGrader.GradingOutcome outcome = llmGrader.gradeSubmission(adapter, assignment, studentCode);
 
             orderedScores.add(outcome.totalScore());
@@ -154,14 +179,21 @@ public class CodeAssessmentModule
             if (!outcome.success())
             {
                 status = "LLM_ERROR_" + provider.toUpperCase();
+
+                System.out.println(status);
             }
+
+            System.out.println("succeeded");
 
             for (LLMGrader.MethodScore ms : outcome.methodScores())
             {
-                methodWriter.printf("%s,%s,%s,%s,%s,%.2f,\"%s\",%s%n",
+                methodWriter.printf("%s,%s,%s,%s,\"%s\",%.2f,\"%s\",%s%n",
                         submissionId, assignment, outcome.provider(), outcome.returnedModel(),
-                        ms.methodName(), ms.score(), sanitizeCsv(ms.feedback()), runId);
+                        sanitizeCsv(ms.methodName()), ms.score(), sanitizeCsv(ms.feedback()), runId);
             }
+
+            String tempLog    = "anthropic".equalsIgnoreCase(adapter.provider()) ? "null(unsupported)" : String.valueOf(TEMPERATURE);
+            String paramsText = "temperature=" + tempLog + ";max_output_tokens=" + MAX_OUTPUT_TOKENS;
 
             logWriter.printf("%s,%s,%s,%s,%s,%s,\"%s\",%s,%d,%d,%d,%d,%d,%.6f,N/A,%s,%s%n",
                     submissionId, assignment, outcome.provider(), outcome.requestedModel(), outcome.returnedModel(),

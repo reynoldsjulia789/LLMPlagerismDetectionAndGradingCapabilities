@@ -1,0 +1,3 @@
+submission_id,assignment,provider,requested_model,returned_model,prompt_version,parameters,rubric_version,input_tokens,output_tokens,api_calls,retries,latency_ms,cost_usd,seed,timestamp,run_id
+10_4345577_139666904_10,Hw1,google,gemini-3.1-flash-lite-preview,gemini-3.1-flash-lite,cam_v1.0,"temperature=0.0;max_output_tokens=2048",rubric_v1.0,4957,620,1,0,2752,0.000000,N/A,2026-11-21T10:00:58.335521400Z,RUN_fe1bc6f2
+10_4345577_139666904_10,Hw1,anthropic,claude-haiku-5-5,claude-haiku-5-5,cam_v1.0,"temperature=null(unsupported);max_output_tokens=2048",rubric_v1.0,6722,1559,1,0,9460,0.014517,N/A,2026-11-21T10:01:07.867675300Z,RUN_fe1bc6f2

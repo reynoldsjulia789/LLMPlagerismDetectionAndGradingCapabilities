@@ -39,14 +39,14 @@ public final class MockAdapterCAM implements ModelAdapter
         double m2Score  = 70.0 + random.nextInt(31);
         String mockJson = getString(m1Score, m2Score);
 
-        long fakeInputTokens  = request.userPrompt().length() / 4;
-        long fakeOutputTokens = mockJson.length() / 4;
+        long fakeInputTokens = TokenEstimate.of(request.systemPrompt() + request.userPrompt());
+        long fakeOutputTokens = TokenEstimate.of(mockJson);
         long fakeLatencyMs    = 15 + random.nextInt(35);
 
         return new ModelResponse(
                 mockJson,
                 modelName,
-                modelName + "-mock-v1",
+                modelName + "-mock-estimate",
                 fakeInputTokens,
                 fakeOutputTokens,
                 fakeLatencyMs,
