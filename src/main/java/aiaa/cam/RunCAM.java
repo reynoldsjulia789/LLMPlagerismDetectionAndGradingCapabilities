@@ -14,7 +14,7 @@ public class RunCAM
     {
         boolean useLiveModels = true;
 
-        for (String arg : args) 
+        for (String arg : args)
         {
             if ("--mock".equalsIgnoreCase(arg))
             {

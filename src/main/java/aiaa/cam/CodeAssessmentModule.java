@@ -86,6 +86,7 @@ public class CodeAssessmentModule
                         {
                             for (Path studentDir : studentDirs.filter(Files::isDirectory).sorted().toList())
                             {
+                                System.out.println("Assessing " + studentDir);
                                 assessStudent(assignment, cohort, studentDir, runId, gradeWriter, methodWriter, logWriter);
                             }
                         }
@@ -110,7 +111,8 @@ public class CodeAssessmentModule
         String submissionId = studentDir.getFileName().toString();
         String status = "SUCCESS";
 
-        // 1. Run JUnit tests
+        // Run JUnit tests
+        System.out.println("JUnit");
         double junitGrade = junitRunner.runJUnitSuite(assignment, studentDir);
 
         if (junitGrade < 0)
@@ -119,11 +121,12 @@ public class CodeAssessmentModule
             junitGrade = 0.0;
         }
 
-        // 2. Read student source files
+        // Read student source files
         String studentCode = promptLoader.readStudentSourceCode(studentDir);
         String paramsText = "temperature=" + TEMPERATURE + ";max_output_tokens=" + MAX_OUTPUT_TOKENS;
 
-        // 3. Evaluate with each LLM provider
+        // Evaluate with each LLM provider
+        System.out.println("LLM evaluation");
         Map<String, Double> camScores = new HashMap<>();
 
         for (ModelAdapter adapter : modelAdapters)
