@@ -1,8 +1,6 @@
 package aiaa.cam;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -114,7 +112,16 @@ public class JUnitRunner
                 .redirectErrorStream(true)
                 .start();
 
-        return process.waitFor(15, TimeUnit.SECONDS) && process.exitValue() == 0;
+        String compilerOutput = new String(process.getInputStream().readAllBytes());
+
+        boolean success = process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0;
+
+        if (!success)
+        {
+            System.err.println("=== JAVAC ERROR ===\n" + compilerOutput);
+        }
+
+        return success;
     }
 
     private double executeJUnit(Path tempDir) throws IOException, InterruptedException
@@ -124,26 +131,27 @@ public class JUnitRunner
                 "execute", "--class-path", ".", "--scan-class-path"
         );
 
+        Path outputLog = tempDir.resolve("junit_output.txt");
+
         Process process = new ProcessBuilder(command)
                 .directory(tempDir.toFile())
                 .redirectErrorStream(true)
+                .redirectOutput(outputLog.toFile())
                 .start();
 
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
+        boolean finishedInTime = process.waitFor(15, TimeUnit.SECONDS);
+
+        if (!finishedInTime)
         {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            process.waitFor(2, TimeUnit.SECONDS);
+
+            System.err.println("=== JUNIT TIMED OUT (INFINITE LOOP) ===");
         }
 
-        if (!process.waitFor(30, TimeUnit.SECONDS))
-        {
-            process.destroyForcibly();
-            return 0.0;
-        }
+        String output = Files.exists(outputLog) ? Files.readString(outputLog) : "";
+        System.out.println("=== JUNIT OUTPUT ===\n" + output);
 
         return parsePassPercentage(output.toString());
     }

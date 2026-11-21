@@ -9,7 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,14 +55,29 @@ public class CodeAssessmentModule
         Files.createDirectories(OUTPUT_DIR);
         String runId = "RUN_" + UUID.randomUUID().toString().substring(0, 8);
 
+        List<String> providers = modelAdapters.stream()
+                .map(adapter -> adapter.provider().toLowerCase())
+                .toList();
+
         try (PrintWriter gradeWriter  = new PrintWriter(new FileWriter(OUTPUT_DIR.resolve("grade_comparison.csv").toFile()));
              PrintWriter methodWriter = new PrintWriter(new FileWriter(OUTPUT_DIR.resolve("method_grades.csv").toFile()));
              PrintWriter logWriter    = new PrintWriter(new FileWriter(OUTPUT_DIR.resolve("experiment_log.csv").toFile())))
         {
 
-            gradeWriter.println("submission_id,assignment,cohort,junit_baseline_grade,grade_scope,"
-                    + "cam_gpt_grade,cam_gemma_grade,cam_claude_grade,"
-                    + "error_gpt,error_gemma,error_claude,run_id,status");
+            StringBuilder header = new StringBuilder("submission_id,assignment,cohort,junit_baseline_grade,grade_scope");
+
+            for (String provider : providers)
+            {
+                header.append(",").append(provider).append("_grade");
+            }
+
+            for (String provider : providers)
+            {
+                header.append(",error_").append(provider);
+            }
+
+            header.append(",run_id,status");
+            gradeWriter.println(header);
 
             methodWriter.println("submission_id,assignment,provider,model_id,method_name,method_score,feedback,run_id");
 
@@ -86,6 +101,7 @@ public class CodeAssessmentModule
                         {
                             for (Path studentDir : studentDirs.filter(Files::isDirectory).sorted().toList())
                             {
+                                System.out.println("Assessing " + studentDir);
                                 assessStudent(assignment, cohort, studentDir, runId, gradeWriter, methodWriter, logWriter);
                             }
                         }
@@ -110,7 +126,8 @@ public class CodeAssessmentModule
         String submissionId = studentDir.getFileName().toString();
         String status = "SUCCESS";
 
-        // 1. Run JUnit tests
+        // Run JUnit tests
+        System.out.println("JUnit");
         double junitGrade = junitRunner.runJUnitSuite(assignment, studentDir);
 
         if (junitGrade < 0)
@@ -119,22 +136,24 @@ public class CodeAssessmentModule
             junitGrade = 0.0;
         }
 
-        // 2. Read student source files
+        // Read student source files
         String studentCode = promptLoader.readStudentSourceCode(studentDir);
         String paramsText = "temperature=" + TEMPERATURE + ";max_output_tokens=" + MAX_OUTPUT_TOKENS;
 
-        // 3. Evaluate with each LLM provider
-        Map<String, Double> camScores = new HashMap<>();
+        // Evaluate with each LLM provider
+        System.out.println("LLM evaluation");
+        List<Double> orderedScores = new ArrayList<>();
 
         for (ModelAdapter adapter : modelAdapters)
         {
-            String family = detectModelFamily(adapter.provider(), adapter.modelId());
+            String provider = adapter.provider().toLowerCase();
             LLMGrader.GradingOutcome outcome = llmGrader.gradeSubmission(adapter, assignment, studentCode);
 
-            camScores.put(family, outcome.totalScore());
+            orderedScores.add(outcome.totalScore());
+
             if (!outcome.success())
             {
-                status = "LLM_ERROR_" + family.toUpperCase();
+                status = "LLM_ERROR_" + provider.toUpperCase();
             }
 
             for (LLMGrader.MethodScore ms : outcome.methodScores())
@@ -152,24 +171,24 @@ public class CodeAssessmentModule
                     Instant.now().toString(), runId);
         }
 
-        double camGpt    = camScores.getOrDefault("gpt", 0.0);
-        double camGemma  = camScores.getOrDefault("gemma", 0.0);
-        double camClaude = camScores.getOrDefault("claude", 0.0);
+        StringBuilder row = new StringBuilder();
 
-        gradeWriter.printf("%s,%s,%s,%.2f,CODE_NORMALIZED_100,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%s,%s%n",
-                submissionId, assignment, cohort, junitGrade,
-                camGpt, camGemma, camClaude,
-                (camGpt - junitGrade), (camGemma - junitGrade), (camClaude - junitGrade),
-                runId, status);
-    }
+        row.append(String.format("%s,%s,%s,%.2f,CODE_NORMALIZED_100",
+                submissionId, assignment, cohort, junitGrade));
 
-    private String detectModelFamily(String provider, String modelId)
-    {
-        String text = (provider + " " + modelId).toLowerCase();
-        if (text.contains("gpt") || text.contains("openai") || text.contains("o1") || text.contains("o3")) return "gpt";
-        if (text.contains("gemma") || text.contains("google") || text.contains("gemini")) return "gemma";
-        if (text.contains("claude") || text.contains("anthropic")) return "claude";
-        return provider.toLowerCase();
+        for (double score : orderedScores)
+        {
+            row.append(String.format(",%.2f", score));
+        }
+
+        for (double score : orderedScores)
+        {
+            row.append(String.format(",%.2f", score - junitGrade));
+        }
+
+        row.append(String.format(",%s,%s", runId, status));
+
+        gradeWriter.println(row);
     }
 
     private String sanitizeCsv(String text)

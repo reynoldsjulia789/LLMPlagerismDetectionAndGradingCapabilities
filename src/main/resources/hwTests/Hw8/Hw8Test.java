@@ -1,16 +1,17 @@
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-
+import org.junit.jupiter.api.Timeout.ThreadMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 10, unit = TimeUnit.SECONDS)
+@Timeout(value = 10, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
 public class Hw8Test
 {
     private Hw8ListAdapter sut1;
@@ -161,6 +162,8 @@ public class Hw8Test
         }
 
         sut1.mergeSort();
+        Collections.sort(values);
+
         assertTrue(sut1.isSorted());
         assertEquals(values, sut1.getList());
     }
