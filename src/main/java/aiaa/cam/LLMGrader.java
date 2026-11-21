@@ -58,11 +58,13 @@ public class LLMGrader
     {
         String userPrompt = promptLoader.buildUserPrompt(assignment, studentCode);
 
+        Double effectiveTemp = "anthropic".equalsIgnoreCase(adapter.provider()) ? null : temperature;
+
         ModelRequest request = new ModelRequest(
                 promptLoader.getSystemPrompt(),
                 userPrompt,
                 maxOutputTokens,
-                temperature,
+                effectiveTemp,
                 "cam_grading_schema",
                 promptLoader.getGradingJsonSchema()
         );
