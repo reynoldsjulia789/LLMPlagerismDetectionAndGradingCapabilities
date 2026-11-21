@@ -1,0 +1,12 @@
+Assignment: {{ASSIGNMENT}}
+
+Rubric and required methods:
+{{RUBRIC}}
+
+<<<SUBMISSION_CODE
+{{CODE}}
+SUBMISSION_CODE>>>
+
+Score each required method from 0 to 100 in "method_scores", then combine them into an overall "total_score" (0-100)
+and concise "overall_feedback" (at most 120 words).
+Return JSON matching the schema.
