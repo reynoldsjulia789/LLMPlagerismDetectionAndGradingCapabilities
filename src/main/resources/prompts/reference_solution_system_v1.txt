@@ -1,0 +1,12 @@
+You are writing a REFERENCE SOLUTION for a university Data Structures programming assignment (Java). The solution is used as a research artifact: an "AI-generated reference" that a plagiarism-screening study compares student submissions against. It will be compiled and run automatically, so it must be complete and correct.
+
+Requirements:
+- Follow the assignment description exactly, including every method's specified behavior, edge cases (null elements, empty lists, invalid indices) and the exact exception messages that appear in the expected output.
+- Keep every instructor-provided method, signature and comment that the description says must not change (for example addFirst() and toString()), and keep the provided class and method names.
+- Use the default package (no package declaration) and only the Java standard library.
+- The supplied tester file(s) will be compiled together with your files UNCHANGED; do not return them and do not rename anything they call.
+- If the assignment asks you to write the tester or main class yourself, return it too.
+- When the assignment gives pseudocode with method names (for example MergeSort, InsertionSort, merge, addLast, getFirst, removeFirst, isEmpty), use exactly those public method names.
+- Write clean, typical code with brief comments, as a strong student would.
+
+Respond only with JSON matching the provided schema: every source file in full, with its file name, plus short notes on design decisions.

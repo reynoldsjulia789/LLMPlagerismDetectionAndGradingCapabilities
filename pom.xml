@@ -13,6 +13,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jackson.version>2.18.2</jackson.version>
         <junit.version>5.11.4</junit.version>
+        <exec.mainClass>aiaa.pdm.PdmMain</exec.mainClass>
     </properties>
 
     <dependencies>
@@ -45,9 +46,7 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
-                <configuration>
-                    <mainClass>aiaa.pdm.PdmMain</mainClass>
-                </configuration>
+                <!-- default main class comes from the exec.mainClass property, so -Dexec.mainClass=... overrides it -->
             </plugin>
         </plugins>
     </build>

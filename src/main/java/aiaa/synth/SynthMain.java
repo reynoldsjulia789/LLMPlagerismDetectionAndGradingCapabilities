@@ -56,6 +56,10 @@ public final class SynthMain {
               --max-output-tokens <n>    default 16000
               --max-llm-attempts <n>     default 3 (compile errors are fed back between attempts)
               --max-retries <n>          HTTP retries per call, default 4
+              --dry-run                  estimate the CONTROL_FLOW LLM calls, tokens and cost without calling a
+                                         model or writing data; no API key needed
+              --price-in <usd>           USD per 1M input tokens (dry-run cost estimate)
+              --price-out <usd>          USD per 1M output tokens
 
             Environment (openai): OPENAI_API_KEY (required), OPENAI_BASE_URL (optional)
             """;
@@ -94,6 +98,9 @@ public final class SynthMain {
         int maxOutputTokens = 16_000;
         int maxAttempts = 3;
         int maxRetries = 4;
+        boolean dryRun = false;
+        Double priceIn = null;
+        Double priceOut = null;
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
             switch (a) {
@@ -121,6 +128,9 @@ public final class SynthMain {
                 case "--max-output-tokens" -> maxOutputTokens = Integer.parseInt(value(args, ++i, a));
                 case "--max-llm-attempts" -> maxAttempts = Integer.parseInt(value(args, ++i, a));
                 case "--max-retries" -> maxRetries = Integer.parseInt(value(args, ++i, a));
+                case "--dry-run" -> dryRun = true;
+                case "--price-in" -> priceIn = Double.parseDouble(value(args, ++i, a));
+                case "--price-out" -> priceOut = Double.parseDouble(value(args, ++i, a));
                 default -> throw new IllegalArgumentException("Unknown option " + a);
             }
         }
@@ -151,6 +161,23 @@ public final class SynthMain {
             }
             jobs.add(new Job(assignment, submissions, out == null ? Path.of("synthetic-data", assignment) : out,
                     idMap == null ? defaultIdMap(privateDir, assignment) : idMap));
+        }
+
+        if (dryRun) {
+            for (Job job : jobs) {
+                SynthConfig config = new SynthConfig(job.label(), job.dir(), starters, excluded, references, sources,
+                        seed, job.out(), null, maxOutputTokens, temperature, maxAttempts);
+                SyntheticGenerator.ControlFlowEstimate e = new SyntheticGenerator(config, null).estimateControlFlow();
+                System.out.printf(Locale.ROOT, "DRY RUN %s: %d CONTROL_FLOW calls (up to %d with compile retries); "
+                        + "ESTIMATED %,d input + %,d output tokens per pass", job.label(), e.calls(),
+                        e.maxCallsWithRetries(), e.inputTokens(), e.outputTokens());
+                if (priceIn != null && priceOut != null) {
+                    double one = (e.inputTokens() * priceIn + e.outputTokens() * priceOut) / 1_000_000;
+                    System.out.printf(Locale.ROOT, "; est. $%.2f (worst case $%.2f)", one, one * maxAttempts);
+                }
+                System.out.println();
+            }
+            return List.of();
         }
 
         ModelAdapter adapter = switch (adapterName) {

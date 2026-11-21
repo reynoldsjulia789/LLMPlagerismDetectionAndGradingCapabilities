@@ -1,0 +1,120 @@
+package aiaa.demo;
+
+import aiaa.eval.EvalMain;
+import aiaa.labels.LabelMain;
+import aiaa.pdm.PdmMain;
+import aiaa.synth.SynthMain;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Stream;
+
+/**
+ * DEMONSTRATION ONLY: runs the whole plagiarism-detection workflow end to end on the committed toy
+ * dataset in {@code demo/} (a made-up "Demo" homework; no course material or student code) and
+ * regenerates every output in {@code demo-output/}:
+ * synthetic copies -> labels and split -> PDM (with and without starter exclusion) -> threshold
+ * selection on validation -> one held-out test evaluation.
+ *
+ * <p>Results from this command are NOT research results. With {@code --mock-llm} the LLM path is
+ * exercised with the offline mock adapter (no API key, no cost).
+ */
+public final class DemoMain {
+
+    static final String MARKER = "DEMO_OUTPUT_README.txt";
+
+    private DemoMain() {
+    }
+
+    public static void main(String[] args) {
+        run(args);
+    }
+
+    public static Path run(String[] args) {
+        Path demo = Path.of("demo");
+        Path out = Path.of("demo-output");
+        boolean mockLlm = false;
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--demo" -> demo = Path.of(args[++i]);
+                case "--out" -> out = Path.of(args[++i]);
+                case "--mock-llm" -> mockLlm = true;
+                case "--help", "-h" -> {
+                    System.out.println("DemoMain [--demo <dir>] [--out <dir>] [--mock-llm]   (demonstration only)");
+                    return null;
+                }
+                default -> throw new IllegalArgumentException("Unknown option " + args[i]);
+            }
+        }
+        if (!Files.isDirectory(demo.resolve("HomeworkSubmissions"))) {
+            throw new IllegalArgumentException("No demo dataset at " + demo.toAbsolutePath());
+        }
+        fresh(out);
+        Path synth = out.resolve("synthetic-data");
+        Path priv = out.resolve("private");
+        Path controls = demo.resolve("negative-controls");
+
+        banner("1/5 synthetic copies");
+        SynthMain.main(new String[]{"--data-root", demo.toString(), "--homework", "Demo", "--out-root", synth.toString(),
+                "--private-dir", priv.toString(), "--sources", "3", "--exclude-file", "StackTester.java"});
+        banner("2/5 labels and dev/validation/test split");
+        LabelMain.run(new String[]{"--data-root", synth.toString(), "--controls", controls.toString(),
+                "--private-dir", priv.toString(), "--out", out.resolve("labels").toString()});
+        banner("3/5 plagiarism detection (token baseline" + (mockLlm ? " + mock LLM" : "") + "), both starter modes");
+        List<String> runs = new ArrayList<>();
+        for (String mode : List.of("strip", "keep")) {
+            Path run = out.resolve("pdm").resolve(mode);
+            List<String> a = new ArrayList<>(List.of("--data-root", synth.toString(), "--homework", "Demo",
+                    "--controls", controls.toString(), "--exclude-file", "StackTester.java", "--starter-mode", mode,
+                    "--out", run.toString(), "--id-map", priv.resolve("pdm_ids.csv").toString()));
+            if (mockLlm) {
+                a.addAll(List.of("--adapter", "mock"));
+            }
+            PdmMain.run(a.toArray(String[]::new));
+            runs.add("--run");
+            runs.add(run.toString());
+        }
+        banner("4/5 threshold selection on VALIDATION (frozen)");
+        List<String> sel = new ArrayList<>(List.of("select", "--labels", out.resolve("labels").toString(),
+                "--out", out.resolve("eval").toString()));
+        sel.addAll(runs);
+        EvalMain.run(sel.toArray(String[]::new));
+        banner("5/5 one held-out TEST evaluation");
+        sel.set(0, "test");
+        EvalMain.run(sel.toArray(String[]::new));
+        System.out.println("\nDEMONSTRATION complete (not research results). Outputs: " + out.toAbsolutePath());
+        return out;
+    }
+
+    /** Replaces the output folder, but only one this command created (it carries a marker file). */
+    private static void fresh(Path out) {
+        try {
+            if (Files.exists(out)) {
+                if (!Files.exists(out.resolve(MARKER))) {
+                    throw new IllegalArgumentException(out.toAbsolutePath() + " exists and was not created by DemoMain");
+                }
+                try (Stream<Path> walk = Files.walk(out)) {
+                    walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                }
+            }
+            Files.createDirectories(out);
+            Files.writeString(out.resolve(MARKER), """
+                    DEMONSTRATION OUTPUT - NOT RESEARCH RESULTS
+                    Regenerated by: ./mvnw -q compile exec:java -Dexec.mainClass=aiaa.demo.DemoMain
+                    Input: demo/ (a made-up "Demo" homework; synthetic toy code, no course material or student data)
+                    """, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static void banner(String step) {
+        System.out.println("\n=== DEMO " + step + " ===");
+    }
+}

@@ -72,45 +72,21 @@ public final class PdmRunner {
                           Double costUsd, long wallMs) {
     }
 
+    /** Everything loaded and prepared before any scoring. */
+    private record Inputs(StarterCodeFilter filter, List<InventoryRow> inventory, List<SourceView> students,
+                          List<SourceView> references, Map<String, String[]> idMap) {
+    }
+
     public Summary run() {
         Instant started = Instant.now();
         String runId = config.assignment() + "-" + config.starterMode().name().toLowerCase(Locale.ROOT) + "-"
                 + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC).format(started);
-
-        StarterCodeFilter filter = buildFilter();
-        List<InventoryRow> inventory = new ArrayList<>();
-        List<SourceView> students = new ArrayList<>();
-        Map<String, String[]> idMap = new LinkedHashMap<>(); // anon -> [cohort, folder]
-        cohortOf.clear();
-
-        for (DataLayout.Cohort cohort : config.cohorts()) {
-            List<Path> folders = SourceFiles.submissionFolders(cohort.dir());
-            for (int i = 0; i < folders.size(); i++) {
-                String folder = folders.get(i).getFileName().toString();
-                boolean alreadyAnonymous = folder.startsWith(cohort.label() + "-");
-                String anon = config.idsFromFolders() || alreadyAnonymous
-                        ? folder : String.format("%s-S%02d", cohort.label(), i + 1);
-                if (cohortOf.putIfAbsent(anon, cohort.label()) != null) {
-                    throw new IllegalArgumentException("Duplicate submission ID " + anon
-                            + " (two cohorts with the same folder names?)");
-                }
-                if (!anon.equals(folder)) {
-                    idMap.put(anon, new String[]{cohort.label(), folder});
-                }
-                SourceView v = prepare(anon, "student", folders.get(i), filter, inventory);
-                if (v != null) {
-                    students.add(v);
-                }
-            }
-        }
-        List<SourceView> references = new ArrayList<>();
-        for (Path ref : config.referencePaths()) {
-            String name = ref.getFileName().toString().replaceAll("\\.(zip|java)$", "");
-            SourceView v = prepare("REF-" + name, "reference", ref, filter, inventory);
-            if (v != null) {
-                references.add(v);
-            }
-        }
+        Inputs in = loadInputs();
+        StarterCodeFilter filter = in.filter();
+        List<InventoryRow> inventory = in.inventory();
+        List<SourceView> students = in.students();
+        List<SourceView> references = in.references();
+        Map<String, String[]> idMap = in.idMap();
 
         // Token baseline on every comparison (cheap, so always exhaustive).
         List<ComparisonResult> results = new ArrayList<>();
@@ -152,6 +128,95 @@ public final class PdmRunner {
         return new Summary(config.outDir(), students.size(), (int) excluded, references.size(), peerPairs,
                 stats.calls.get(), stats.failures.get(), stats.inputTokens(), stats.outputTokens(),
                 config.costUsd(stats.inputTokens(), stats.outputTokens()), wallMs);
+    }
+
+    private Inputs loadInputs() {
+        StarterCodeFilter filter = buildFilter();
+        List<InventoryRow> inventory = new ArrayList<>();
+        List<SourceView> students = new ArrayList<>();
+        Map<String, String[]> idMap = new LinkedHashMap<>(); // anon -> [cohort, folder]
+        cohortOf.clear();
+        for (DataLayout.Cohort cohort : config.cohorts()) {
+            for (SubmissionIds.Entry e : SubmissionIds.assign(cohort, config.idsFromFolders())) {
+                if (cohortOf.putIfAbsent(e.id(), cohort.label()) != null) {
+                    throw new IllegalArgumentException("Duplicate submission ID " + e.id()
+                            + " (two cohorts with the same folder names?)");
+                }
+                if (e.renamed()) {
+                    idMap.put(e.id(), new String[]{cohort.label(), e.folder().getFileName().toString()});
+                }
+                SourceView v = prepare(e.id(), "student", e.folder(), filter, inventory);
+                if (v != null) {
+                    students.add(v);
+                }
+            }
+        }
+        List<SourceView> references = new ArrayList<>();
+        for (Path ref : config.referencePaths()) {
+            String name = ref.getFileName().toString().replaceAll("\\.(zip|java)$", "");
+            SourceView v = prepare("REF-" + name, "reference", ref, filter, inventory);
+            if (v != null) {
+                references.add(v);
+            }
+        }
+        return new Inputs(filter, inventory, students, references, idMap);
+    }
+
+    /** Result of {@link #estimate}: what an LLM run would send, without calling any model. */
+    public record Estimate(int peerCalls, int aiCalls, int tooLarge, long inputTokens, long outputTokens,
+                           Double costUsd, int submissions, double inputTokensPerPeerCall,
+                           long extrapolatedInputTokens100, long extrapolatedOutputTokens100,
+                           Double extrapolatedCostUsd100) {
+    }
+
+    /**
+     * Dry run: builds every prompt the LLM run would send and estimates tokens and cost, without calling
+     * any model. Input tokens are estimated from characters ({@link aiaa.llm.TokenEstimate}); output tokens
+     * per call are assumed. Also extrapolates to the spec's benchmark size of 100 submissions (4,950 pairs).
+     */
+    public Estimate estimate(String modelId, int assumedOutputTokens) {
+        Inputs in = loadInputs();
+        LlmSimilarityJudge judge = new LlmSimilarityJudge(
+                new aiaa.llm.MockAdapter(modelId, r -> ""), config.assignment(), config.starterMode(),
+                config.maxOutputTokens(), config.temperature(), config.maxInputChars());
+        String system = LlmSimilarityJudge.resource(LlmSimilarityJudge.SYSTEM_RESOURCE);
+        List<SourceView> s = in.students();
+        long chars = 0;
+        long peerChars = 0;
+        int peer = 0;
+        int ai = 0;
+        int tooLarge = 0;
+        for (int i = 0; i < s.size(); i++) {
+            for (int j = i + 1; j < s.size(); j++) {
+                if (config.maxLlmPeerPairs() != null && peer >= config.maxLlmPeerPairs()) {
+                    break;
+                }
+                int c = system.length() + judge.buildUserPrompt(Comparison.PEER, s.get(i), s.get(j)).length();
+                if (c > config.maxInputChars()) {
+                    tooLarge++;
+                    continue;
+                }
+                chars += c;
+                peerChars += c;
+                peer++;
+            }
+            for (SourceView ref : in.references()) {
+                int c = system.length() + judge.buildUserPrompt(Comparison.AI_REFERENCE, s.get(i), ref).length();
+                if (c > config.maxInputChars()) {
+                    tooLarge++;
+                    continue;
+                }
+                chars += c;
+                ai++;
+            }
+        }
+        long inTok = aiaa.llm.TokenEstimate.fromChars(chars);
+        long outTok = (long) (peer + ai) * assumedOutputTokens;
+        double perPeer = peer == 0 ? 0 : (double) aiaa.llm.TokenEstimate.fromChars(peerChars) / peer;
+        long in100 = Math.round(perPeer * 4950);
+        long out100 = 4950L * assumedOutputTokens;
+        return new Estimate(peer, ai, tooLarge, inTok, outTok, config.costUsd(inTok, outTok), s.size(), perPeer,
+                in100, out100, config.costUsd(in100, out100));
     }
 
     private StarterCodeFilter buildFilter() {

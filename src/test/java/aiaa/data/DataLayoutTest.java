@@ -69,7 +69,7 @@ class DataLayoutTest {
     void pooledCohortsAreComparedAndPairsTagged(@TempDir Path dir) throws IOException {
         Path root = buildRoot(dir);
         Path out = dir.resolve("out");
-        PdmRunner.Summary s = PdmMain.run(new String[]{"--data-root", root.toString(), "--homework", "Hw1",
+        PdmRunner.Summary s = PdmMain.run(new String[]{"--data-root", root.toString(), "--homework", "Hw1", "--no-controls",
                 "--out", out.toString(), "--id-map", dir.resolve("private/ids.csv").toString()});
         assertEquals(4, s.eligibleSubmissions());
         assertEquals(6, s.peerPairs(), "4 submissions across 2 cohorts");
@@ -99,7 +99,7 @@ class DataLayoutTest {
 
         Path out = dir.resolve("out-synth");
         Path idMap = dir.resolve("private/pdm_ids.csv");
-        PdmMain.run(new String[]{"--data-root", synth.toString(), "--homework", "Hw1",
+        PdmMain.run(new String[]{"--data-root", synth.toString(), "--homework", "Hw1", "--no-controls",
                 "--out", out.toString(), "--id-map", idMap.toString()});
         String comparisons = Files.readString(out.resolve("comparisons.csv"));
         assertTrue(comparisons.contains("F25Hw1-V01"), "generated folder names are used as IDs");

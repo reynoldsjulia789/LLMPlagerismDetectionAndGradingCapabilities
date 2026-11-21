@@ -7,18 +7,33 @@ Java 25 / Maven project. Modules:
 | `aiaa.llm` | Shared model adapter interface (`ModelAdapter`), `OpenAiAdapter`, `MockAdapter` | done |
 | `aiaa.pdm` | Plagiarism Detection Module (PDM) | core done |
 | `aiaa.synth` | Synthetic copy generator (labeled plagiarism test cases) | done (control flow needs an LLM) |
-| CAM / OCAA | Code assessment and output-based grading | TODO |
+| `aiaa.data` | Shared dataset layout, homework defaults, assignment materials | done |
+| `aiaa.labels` | Ground-truth labels and dev/validation/test split | done |
+| `aiaa.eval` | Threshold sweep, frozen selection, held-out detection metrics | done |
+| `aiaa.refs` | AI reference solutions: generation and automatic verification | done (generation needs an LLM) |
+| `aiaa.demo` | One-command demonstration on a toy dataset | done |
+| CAM / OCAA | Code assessment and output-based grading | partner's branch |
 
 ## Prerequisites
 
-- JDK 25
-- Maven 3.9+ (or IntelliJ's bundled Maven)
+- JDK 25. Maven is **not** needed: `./mvnw` (`mvnw.cmd` on Windows) downloads Maven 3.9.9 on first use.
 - For real LLM runs: an OpenAI API key in `OPENAI_API_KEY` (optional `OPENAI_BASE_URL`). Never commit keys.
 
+```bash
+./mvnw test                                   # all unit + end-to-end tests (offline, MockAdapter)
+./mvnw -q compile exec:java -Dexec.args="--help"                       # PDM (default main class)
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.demo.DemoMain        # the demonstration, see below
 ```
-mvn test                     # unit + end-to-end tests (offline, uses MockAdapter)
-mvn -q compile exec:java -Dexec.args="--help"
+
+Every tool has `--help`. Run a tool other than the PDM with `-Dexec.mainClass=aiaa.<package>.<Name>Main`.
+
+## Demonstration (one command)
+
+```bash
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.demo.DemoMain    # add -Dexec.args="--mock-llm" to exercise the LLM path offline
 ```
+
+This runs the complete detection workflow on `demo/`: copies → labels and split → PDM with and without starter exclusion → threshold selection → one held-out evaluation. It regenerates everything in `demo-output/`. `demo/` is a made-up toy homework (an int `Stack`) with 12 synthetic "submissions" and 4 negative controls. It contains no course material or student data. **Demo results are not research results**, and the full research evaluation runs on the real data as described below.
 
 ## Dataset layout (`aiaa.data`)
 
@@ -60,10 +75,10 @@ Similarity to an AI reference only detects copying from *that known reference*.
 
 ```bash
 # Token baseline only (free): Hw1, both cohorts pooled, with and without starter exclusion
-mvn -q compile exec:java -Dexec.args="--homework Hw1"
-mvn -q compile exec:java -Dexec.args="--homework Hw1 --starter-mode keep"
+./mvnw -q compile exec:java -Dexec.args="--homework Hw1"
+./mvnw -q compile exec:java -Dexec.args="--homework Hw1 --starter-mode keep"
 # One cohort only
-mvn -q compile exec:java -Dexec.args="--homework Hw1 --cohort F25"
+./mvnw -q compile exec:java -Dexec.args="--homework Hw1 --cohort F25"
 
 # OpenAI: smoke test on 5 pairs first, then the full run with --resume
 export OPENAI_API_KEY=...
@@ -113,21 +128,94 @@ Copies are made within a cohort (source and partial-copy host come from the same
 | `STACKED` | rename + reorder + comment edits + reformat |
 | `PARTIAL` | replaces some of another student's (the host's) methods with the source's versions; target 25/50/75%, rotating across sources |
 
-**Amount copied** = fraction of the variant's substantive, non-starter lines (testers excluded) that came from the source. It is 1.0 for whole-program variants. A partial variant is derived from **both** its source (by the amount copied) and its host (the rest).
+**Amount copied** = fraction of the variant's substantive, non-starter lines (testers excluded) that came from the source. It is 1.0 for whole-program variants. A partial variant is derived from **both** its source (by the amount copied) and its host (the rest). Hosts are chosen from submissions that are neither a source nor already a host, so copy families stay small (at most 9 submissions).
 
 ```bash
 # Generate for every cohort of Hw1 (or add --cohort F25)
-mvn -q compile exec:java -Dexec.mainClass=aiaa.synth.SynthMain -Dexec.args="--homework Hw1"
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.synth.SynthMain -Dexec.args="--homework Hw1"
 # Screen the generated dataset exactly like the real one
-mvn -q compile exec:java -Dexec.args="--data-root synthetic-data --homework Hw1"
+./mvnw -q compile exec:java -Dexec.args="--data-root synthetic-data --homework Hw1"
 ```
 
 Add `--reference <dir>` to also derive "AI copying" variants from a verified AI reference solution.
 
+## Negative controls (`negative-controls/`, committed)
+
+Four independently written solutions per homework, `negative-controls/<Hw>/<Hw>-Nxx/`, with `provenance.csv`. They are AI-generated at the instructor's direction, written only from the assignment descriptions and starter code, and verified: HW1 and HW2 reproduce the instructor's expected output exactly, and HW8 sorts correctly. A control is a known **negative** against every submission, which makes false-positive rates measurable. The PDM adds them automatically as cohort `Controls` (`--no-controls` to skip). See `negative-controls/README.md` for limitations.
+
+## Labels and splits (`aiaa.labels`)
+
+```bash
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.labels.LabelMain     # defaults: synthetic-data, negative-controls, seed 42
+```
+
+Writes `synthetic-data/labels/` (gitignored, with the data):
+
+| File | Contents |
+|---|---|
+| `<Hw>/pair_labels.csv` | Every peer pair (and every submission × AI reference): `pair_key` (joins with the PDM's `comparisons.csv`), kinds, cohorts, split, `label`, `relation`, transformation, amount copied, label source |
+| `<Hw>/submission_labels.csv` | Every submission: kind, label, transformation, source, host, amount copied, family, split |
+| `split_manifest.csv` | Submission → family → split |
+| `split_log.json` | Seed, target and achieved split sizes per homework and kind, pair-label counts per split, label definitions |
+
+**Pair labels.** `COPY`: one side was derived from the other (relation `SOURCE`, or `HOST` for a partial copy's host), or both from a common submission (`SIBLING`). `NEGATIVE`: exactly one side is a negative control. `EXCLUDED`: both are controls (same author). `UNRESOLVED`: no verified provenance, e.g. original vs original; never treat these as negatives.
+
+**Submission labels.** `COPY` (peer-copy variant), `AI_COPY` (variant of an AI reference), `NEGATIVE` (control), `UNRESOLVED` (original).
+
+**Split** (50/25/25 dev/validation/test, seeded). A *family* never straddles splits. A family is a copy with its source and host, plus a student's submissions to the same homework in both terms. Grouping a student *across* homeworks (`--group-students across-homeworks`) is infeasible on this data: nearly every student did every homework, which chains everything into two families. Controls are split 2/1/1 per homework. Pairs whose sides fall in different splits are `CROSS_SPLIT` and are left out of metrics.
+
+## Thresholds and detection metrics (`aiaa.eval`)
+
+Two phases, which enforce the spec's "freeze thresholds before held-out evaluation":
+
+```bash
+# 1. sweep + select on VALIDATION, freeze (pass one --run per PDM output: homework x starter mode x model)
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.eval.EvalMain -Dexec.args="select \
+    --run pdm-output/Hw1/strip --run pdm-output/Hw1/keep --run pdm-output/Hw2/strip ..."
+# 2. apply the frozen thresholds ONCE to TEST
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.eval.EvalMain -Dexec.args="test --run ... (same runs)"
+```
+
+- **Configurations:** a threshold is selected per homework × starter mode × method/model/prompt × comparison type (`PEER`, `AI_REFERENCE`) × level (`PAIR`, `STUDENT`).
+- **Sweep:** 0–100 in steps of 5, then steps of 0.5 within ±5 of the best coarse value. A score is flagged when it is ≥ the threshold.
+- **Rule:** maximum validation recall subject to validation false-positive rate ≤ 5% (`--max-fpr`). Ties go to the lower FPR, then to the higher threshold. The status is reported when no threshold qualifies (`NO_THRESHOLD_MEETS_FPR`, `NO_USEFUL_THRESHOLD`, `NO_NEGATIVES`, …).
+- **Truth:** positives are `COPY` (or `AI_COPY`); negatives are `NEGATIVE` (controls) only. `UNRESOLVED` pairs never count as false positives; their flag rate is reported separately as instructor review workload. Failed LLM comparisons count as missed detections.
+- **Student level:** a submission's score is its best partner score over **all** splits (as in deployment), excluding control-vs-control pairs. Its threshold is selected separately with the same rule.
+- **Freeze:** `thresholds.json` stores the thresholds and the SHA-256 of every input. `test` refuses if an input changed, refuses a second evaluation unless given `--allow-reevaluation` (logged in `evaluation_log.jsonl`), and `select` is refused once a test evaluation exists.
+- **Outputs:** `sweep.csv` (DEV + VALIDATION curves), `selection_summary.csv`, `validation_errors.csv`, `test_results.csv` (confusion counts, precision/recall/F1/FPR/FNR, 95% Wilson intervals, family-cluster bootstrap intervals, cluster counts), `test_breakdown.csv` (recall by transformation, relation, amount copied, cohort relation), `test_errors.csv` (false positives and negatives with starter share, code size and a first-pass hint), `detection_results.csv` (the spec's detection results table), `sweep_test_postfreeze.csv` (threshold sensitivity after the freeze), and `starter_mode_comparison.csv`.
+- **Uncertainty caveat:** the independent units for the false-positive rate are the controls. Validation and test have **1 control per homework**, so FPR intervals are wide, and `test_results.csv` reports the cluster counts so this stays visible.
+
+**Do not run `test` on the real data until the dataset and prompts are final.** Adding the LLM control-flow copies changes the labels and splits, and the held-out set may be evaluated only once.
+
+## AI reference solutions (`aiaa.refs`)
+
+```bash
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--dry-run --price-in <usd/Mtok> --price-out <usd/Mtok>"
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--homework Hw1 --adapter openai --model <exact-id>"
+./mvnw -q compile exec:java -Dexec.mainClass=aiaa.refs.RefMain -Dexec.args="--verify negative-controls/Hw1/Hw1-N01 --homework Hw1"
+```
+
+The generator sends the assignment description, starter code and supplied tester to the model, then **verifies** the result:
+- It compiles the result together with the instructor's unchanged testers.
+- It runs the program in a separate JVM with a timeout. **This executes model-written code on your machine.**
+- HW1 and HW2 must reproduce the description's CORRECT OUTPUT exactly.
+- HW8 must print `true`/`true` and pass an independent check of both sorts against `Arrays.sort`.
+
+A failed attempt is retried with the compiler errors or the first output difference fed back. Verified results go to `references/<Hw>/<model>/` with `provenance.json`. Unverified ones go to `<model>.unverified/`. `references/` is gitignored because these are solutions to assignments the instructor wants to reuse. `human_reviewed` stays `false` until a person has read the code, as the spec requires independent checking. Pass a verified folder to the PDM and the generator with `--reference`.
+
+## Cost estimates before spending (`--dry-run`)
+
+`PdmMain`, `SynthMain` and `RefMain` take `--dry-run`. It builds every prompt the real run would send, then prints the number of calls, **estimated** tokens (characters ÷ 3.5) and, with `--price-in/--price-out`, the cost. The PDM also extrapolates to the spec's 100-submission benchmark (4,950 pairs). No model is called and no key is needed. Example (token counts only; the cost depends on the model's price):
+
+| Run | Peer calls | Est. input tokens |
+|---|---|---|
+| Real data, one homework (both terms + controls) | 861–946 | 3.0M–5.6M |
+| Synthetic dataset, one homework | 10,585–12,090 | 42M–71M |
+| 100-submission benchmark, one homework | 4,950 | 16M–33M |
+| Control-flow copies, one cohort | 8 | ≈38k |
+| AI reference, one homework | 1 | ≈3k–6k |
+
 ### Not built yet (PDM)
 
-- Negative controls (independently written solutions)
-- Pair/student label files derived from the manifest
-- Dev/validation/test split manifests with seeds
-- Threshold sweep, threshold selection on validation data, and held-out metrics/charts
-- AI reference generation (references must be checked by hand before use)
+- Running anything that needs the API key: OpenAI smoke test, AI references, control-flow copies, LLM PDM runs, 3× stability repeats
+- Detection charts and tables in the Word report (the CSVs above are their data)

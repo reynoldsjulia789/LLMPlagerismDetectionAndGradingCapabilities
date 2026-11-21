@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["notes", "files"],
+  "properties": {
+    "notes": { "type": "string" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "content"],
+        "properties": {
+          "name": { "type": "string", "description": "File name, e.g. MyLinkedList.java" },
+          "content": { "type": "string", "description": "Complete Java source of the file" }
+        }
+      }
+    }
+  }
+}

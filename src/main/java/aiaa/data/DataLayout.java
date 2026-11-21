@@ -33,6 +33,19 @@ public final class DataLayout {
     public static final String DEFAULT_ROOT = "HomeworkSubmissions-test data";
     public static final String SUBMISSIONS = "HomeworkSubmissions";
     public static final String DESCRIPTIONS = "HomeworkDescriptions";
+    /** Committed folder of negative controls: {@code negative-controls/<Hw>/<Hw>-Nxx/}. */
+    public static final String DEFAULT_CONTROLS_ROOT = "negative-controls";
+    /** Cohort label used for negative controls when they are pooled with real cohorts. */
+    public static final String CONTROLS_COHORT = "Controls";
+
+    /** The homework's negative controls as a cohort, if {@code controlsRoot/<Hw>/} exists. */
+    public static Optional<Cohort> controls(Path controlsRoot, String homework) {
+        if (controlsRoot == null) {
+            return Optional.empty();
+        }
+        Path dir = controlsRoot.resolve(HomeworkSpec.forName(homework).name());
+        return Files.isDirectory(dir) ? Optional.of(new Cohort(CONTROLS_COHORT, dir)) : Optional.empty();
+    }
 
     private DataLayout() {
     }

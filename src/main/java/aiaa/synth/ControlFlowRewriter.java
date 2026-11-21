@@ -100,6 +100,15 @@ final class ControlFlowRewriter {
         return new Outcome(Map.of(), false, maxAttempts, "", lastError, in, out, returned);
     }
 
+    /** {estimated input tokens, estimated output tokens} for one first-attempt call (no model is called). */
+    static long[] estimate(Map<String, String> targets, Map<String, String> fixed) {
+        String system = resource(SYSTEM_RESOURCE) + resource(SCHEMA_RESOURCE);
+        long in = aiaa.llm.TokenEstimate.of(system + userPrompt(targets, fixed, null));
+        long code = targets.values().stream().mapToLong(String::length).sum();
+        long out = aiaa.llm.TokenEstimate.fromChars(code + 600); // whole files come back, plus JSON and changes
+        return new long[]{in, out};
+    }
+
     private static String userPrompt(Map<String, String> targets, Map<String, String> fixed, String lastError) {
         StringBuilder sb = new StringBuilder();
         sb.append("Rewrite these files with equivalent control flow:\n\n");
