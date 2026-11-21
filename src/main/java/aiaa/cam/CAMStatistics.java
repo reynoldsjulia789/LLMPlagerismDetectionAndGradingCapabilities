@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,14 +33,14 @@ public class CAMStatistics
 
     private static void writeGradingMetricsCsv(List<GradeRecord> records, Path outFile) throws IOException
     {
-        String[] scopes = {"Hw1", "Hw2", "Hw8", "POOLED"};
-        String[] methods = {
-                "GPT_Only", "Gemma_Only", "Claude_Only"
-        };
+        if (records.isEmpty()) return;
+
+        String[]     scopes    = {"Hw1", "Hw2", "Hw8", "POOLED"};
+        List<String> providers = new ArrayList<>(records.get(0).camGradesByProvider().keySet());
 
         try (PrintWriter writer = new PrintWriter(new FileWriter(outFile.toFile())))
         {
-            writer.println("scope,model,n,mae,rmse,mean_signed_error,within_5_pct,within_10_pct");
+            writer.println("scope,provider,n,mae,rmse,mean_signed_error,within_5_pct,within_10_pct");
 
             for (String scope : scopes)
             {
@@ -53,17 +54,17 @@ public class CAMStatistics
                         .map(GradeRecord::junitBaselineGrade)
                         .toList();
 
-                for (String method : methods)
+                for (String provider : providers)
                 {
                     List<Double> predictedGrades = subset.stream()
-                            .map(r -> extractScore(r, method))
+                            .map(r -> r.camGradesByProvider().getOrDefault(provider, 0.0))
                             .toList();
 
                     ErrorMetrics metrics = GradingMath.computeErrorMetrics(predictedGrades, baselineGrades);
 
                     writer.printf("%s,%s,%d,%.2f,%.2f,%.2f,%.2f%%,%.2f%%%n",
                             scope,
-                            method,
+                            "CAM_" + provider,
                             metrics.sampleSize(),
                             metrics.meanAbsoluteError(),
                             metrics.rootMeanSquaredError(),
@@ -73,17 +74,6 @@ public class CAMStatistics
                 }
             }
         }
-    }
-
-    private static double extractScore(GradeRecord r, String model)
-    {
-        return switch (model)
-        {
-            case "GPT"    -> r.camGpt();
-            case "Gemma"  -> r.camGemma();
-            case "Claude" -> r.camClaude();
-            default       -> 0.0;
-        };
     }
 
     private static void writeEfficiencyCsv(List<TelemetryRecord> logs, Path outFile) throws IOException
@@ -126,16 +116,32 @@ public class CAMStatistics
 
     private static void writeScatterPlotCsv(List<GradeRecord> records, Path outFile) throws IOException
     {
+        if (records.isEmpty()) return;
+
+        List<String> providers = new ArrayList<>(records.get(0).camGradesByProvider().keySet());
+
         try (PrintWriter writer = new PrintWriter(new FileWriter(outFile.toFile())))
         {
-            writer.println("submission_id,assignment,ocaa_baseline_grade,equality_line,"
-                    + "cam_gpt,cam_gemma,cam_claude,hybrid_gpt,hybrid_gemma,hybrid_claude");
+            StringBuilder header = new StringBuilder("submission_id,assignment,junit_baseline_grade,equality_line");
+
+            for (String provider : providers)
+            {
+                header.append(",").append(provider);
+            }
+
+            writer.println(header);
 
             for (GradeRecord r : records)
             {
-                writer.printf("%s,%s,%.2f,%.2f,%.2f,%.2f,%.2fn",
-                        r.submissionId(), r.assignment(), r.junitBaselineGrade(), r.junitBaselineGrade(),
-                        r.camGpt(), r.camGemma(), r.camClaude());
+                StringBuilder row = new StringBuilder();
+                row.append(String.format("%s,%s,%.2f,%.2f",
+                        r.submissionId(), r.assignment(), r.junitBaselineGrade(), r.junitBaselineGrade()));
+
+                for (String provider : providers) {
+                    row.append(String.format(",%.2f", r.camGradesByProvider().getOrDefault(provider, 0.0)));
+                }
+
+                writer.println(row);
             }
         }
     }

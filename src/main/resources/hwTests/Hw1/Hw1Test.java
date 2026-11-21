@@ -1,11 +1,12 @@
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@Timeout(value = 2, unit = TimeUnit.SECONDS)
+@Timeout(value = 2, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
 public class Hw1Test
 {
     private Hw1ListAdapter sut1;
@@ -15,9 +16,9 @@ public class Hw1Test
     @BeforeEach
     public void setup()
     {
-        Hw1ListAdapter sut1 = new Hw1ListAdapter();
-        Hw1ListAdapter sut2 = new Hw1ListAdapter();
-        Hw1ListAdapter sut3 = new Hw1ListAdapter();
+        sut1 = new Hw1ListAdapter();
+        sut2 = new Hw1ListAdapter();
+        sut3 = new Hw1ListAdapter();
 
         sut1.addFirst(null);
         sut1.addFirst("bad");
@@ -44,8 +45,8 @@ public class Hw1Test
         assertEquals("3:Abby", sut2.get(2));
 
         assertNull(sut1.get(0));
-        assertEquals("bad", sut1.get(1));
-        assertEquals("apple", sut1.get(2));
+        assertEquals("apple", sut1.get(1));
+        assertEquals("bad", sut1.get(2));
     }
 
     @Test
@@ -77,7 +78,7 @@ public class Hw1Test
         assertEquals(3, sut1.get(3));
 
         sut3.add(0, 0);
-        assertEquals(0, sut1.get(0));
+        assertEquals(0, sut3.get(0));
 
         assertThrows(Exception.class, () -> sut3.add(2, 2));
     }
@@ -94,18 +95,18 @@ public class Hw1Test
         assertThrows(Exception.class, () -> sut1.remove(2));
 
         removed = sut1.remove(1);
-        assertEquals("apple", removed);
+        assertEquals("bad", removed);
 
         removed = sut1.remove(0);
-        assertEquals("bad", removed);
+        assertEquals("apple", removed);
     }
 
     @Test
     public void testGetIndex()
     {
         assertNull(sut1.get(0));
-        assertEquals("bad", sut1.get(1));
-        assertEquals("apple", sut1.get(2));
+        assertEquals("apple", sut1.get(1));
+        assertEquals("bad", sut1.get(2));
         assertNull(sut1.get(3));
         assertThrows(Exception.class, () -> sut1.get(4));
     }
