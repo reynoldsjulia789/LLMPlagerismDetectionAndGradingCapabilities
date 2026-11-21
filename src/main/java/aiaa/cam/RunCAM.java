@@ -12,6 +12,16 @@ public class RunCAM
     private static final String _groq_model      = "openai/gpt-oss-120b";
     private static final String _anthropic_model = "claude-haiku-5-5";
 
+    // input cost per 1000 tokens (cost per million / 1000)
+    private static final Double _google_input_cost    = 0.0003;
+    private static final Double _groq_input_cost      = 0.00015;
+    private static final Double _anthropic_input_cost = 0.001;
+
+    // output cost per 1000 tokens (cost per million / 1000)
+    private static final Double _google_output_cost    = 0.0025;
+    private static final Double _groq_output_cost      = 0.00060;
+    private static final Double _anthropic_output_cost = 0.005;
+    
     public static void main(String[] args)
     {
         boolean useLiveModels = false;
@@ -52,14 +62,14 @@ public class RunCAM
 
             // Pricing per 1,000 tokens (USD) for cost estimation
             Map<String, Double> inputPricePer1k = Map.of(
-                    _groq_model, 0.00015,               // using free tier, but recording cost for paid version
-                    _anthropic_model, 0.001,
-                    _google_model, 0.0003                   // using free tier, but recording cost for paid version
+                    _groq_model,      _groq_input_cost,          // using free tier, but recording cost for paid version
+                    _anthropic_model, _anthropic_input_cost,
+                    _google_model,    _google_input_cost         // using free tier, but recording cost for paid version
             );
             Map<String, Double> outputPricePer1k = Map.of(
-                    _groq_model, 0.00060,               // using free tier, but recording cost for paid version
-                    _anthropic_model, 0.005,
-                    _google_model, 0.0025                   // using free tier, but recording cost for paid version
+                    _groq_model,      _groq_output_cost,         // using free tier, but recording cost for paid version
+                    _anthropic_model, _anthropic_output_cost,
+                    _google_model,    _google_output_cost        // using free tier, but recording cost for paid version
             );
 
             // Run JUnit tests and LLM grading
