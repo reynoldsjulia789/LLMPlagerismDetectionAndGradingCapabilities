@@ -1,6 +1,7 @@
 package aiaa.cam;
 
 import aiaa.llm.AnthropicAdapter;
+import aiaa.llm.GeminiAdapter;
 import aiaa.llm.MockAdapterCAM;
 import aiaa.llm.ModelAdapter;
 
@@ -37,6 +38,7 @@ public class RunCAM
             {
                 System.out.println("Mode: LIVE (using real LLM APIs)");
 
+                adapters.add(GeminiAdapter.fromEnvironment("gemini-3.1-flash-lite-preview", 3));
                 adapters.add(AnthropicAdapter.fromEnvironment("claude-haiku-5-5", null, 1));
             }
             else
@@ -50,11 +52,13 @@ public class RunCAM
             // Pricing per 1,000 tokens (USD) for cost estimation
             Map<String, Double> inputPricePer1k = Map.of(
                     "gpt-4o-mini", 0.00015,
-                    "claude-haiku-5-5", 0.001
+                    "claude-haiku-5-5", 0.001,
+                    "gemini-3.1-flash-lite-preview", 0.0
             );
             Map<String, Double> outputPricePer1k = Map.of(
                     "gpt-4o-mini", 0.00060,
-                    "claude-haiku-5-5", 0.005
+                    "claude-haiku-5-5", 0.005,
+                    "gemini-3.1-flash-lite-preview", 0.0
             );
 
             // Run JUnit tests and LLM grading

@@ -169,6 +169,9 @@ public class CodeAssessmentModule
         for (ModelAdapter adapter : modelAdapters)
         {
             String provider = adapter.provider().toLowerCase();
+
+            System.out.println("Model - " + provider + ":" + adapter.modelId());
+
             LLMGrader.GradingOutcome outcome = llmGrader.gradeSubmission(adapter, assignment, studentCode);
 
             orderedScores.add(outcome.totalScore());
@@ -176,13 +179,17 @@ public class CodeAssessmentModule
             if (!outcome.success())
             {
                 status = "LLM_ERROR_" + provider.toUpperCase();
+
+                System.out.println(status);
             }
+
+            System.out.println("succeeded");
 
             for (LLMGrader.MethodScore ms : outcome.methodScores())
             {
-                methodWriter.printf("%s,%s,%s,%s,%s,%.2f,\"%s\",%s%n",
+                methodWriter.printf("%s,%s,%s,%s,\"%s\",%.2f,\"%s\",%s%n",
                         submissionId, assignment, outcome.provider(), outcome.returnedModel(),
-                        ms.methodName(), ms.score(), sanitizeCsv(ms.feedback()), runId);
+                        sanitizeCsv(ms.methodName()), ms.score(), sanitizeCsv(ms.feedback()), runId);
             }
 
             String tempLog    = "anthropic".equalsIgnoreCase(adapter.provider()) ? "null(unsupported)" : String.valueOf(TEMPERATURE);

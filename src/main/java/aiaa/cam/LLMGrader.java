@@ -105,6 +105,8 @@ public class LLMGrader
         }
         catch (ModelException | IOException caught)
         {
+            System.err.println("LLM Error (" + adapter.modelId() + "): " + caught.getMessage());
+
             int retries = (caught instanceof ModelException me) ? me.retries() : 0;
 
             return new GradingOutcome(

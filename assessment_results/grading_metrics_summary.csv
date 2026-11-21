@@ -1,0 +1,5 @@
+scope,provider,n,mae,rmse,mean_signed_error,within_5_pct,within_10_pct
+Hw1,CAM_google,1,15.00,15.00,15.00,0.00%,0.00%
+Hw1,CAM_anthropic,1,2.00,2.00,2.00,100.00%,100.00%
+POOLED,CAM_google,1,15.00,15.00,15.00,0.00%,0.00%
+POOLED,CAM_anthropic,1,2.00,2.00,2.00,100.00%,100.00%
